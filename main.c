@@ -1,6 +1,7 @@
 // Filippo Piazza
 // 2024
-#define MAX_LENGTH 255
+#define MAX_WORD_LENGTH 255
+#define MAX_LINE_LENGTH 1024
 
 #include<stdio.h>
 #include<string.h>
@@ -41,16 +42,17 @@ struct ordini_completi
 void aggiungi_ricetta(){}
 void rimuovi_ricetta(){}
 void aggiungi_ordine(){}
-void rifornisci(char ingr[MAX_LENGTH], int qta, struct magazzino *magazzino){}
+void rifornisci(char ingr[MAX_WORD_LENGTH], int qta, struct magazzino *magazzino){}
 void scadenza(int t, struct magazzino *magazzino){}
 void prepara_ordini(){}
 void carica_furgone(){}
+void verifica_scadenze(int t, struct magazzino *magazzino){}
 
 
 int main(void)
 {
     int max_cargo, tempocorriere, cd_corriere, t;
-    char buffer[MAX_LENGTH];
+    char buffer[MAX_LINE_LENGTH];
     // generazione liste
     // todo
 
@@ -118,24 +120,25 @@ int main(void)
         }
 
         // se rimuovi_ricetta
-        if(buffer[2] == 'm'){
+        elif(buffer[2] == 'm'){
             char *token = strtok(buffer + 16, " "); //verifica offset
             printf("%s", token);
         }
 
         // se ordine
-        if(buffer[2] == 'd'){
+        elif(buffer[2] == 'd'){
             char *token = strtok(buffer + 7, " "); //verifica offset
             printf("%s", token);
         }
 
         // se rifornimento
-        if(buffer[2] == 'f'){
+        elif(buffer[2] == 'f'){
             char *token = strtok(buffer + 13, " "); //verifica offset
             printf("%s", token);
         }
 
         //verifico per ogni ingrediente le cose scadute
+
 
         t += 1;
         memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
