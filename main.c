@@ -1,5 +1,6 @@
 // Filippo Piazza
 // 2024
+#define _CRT_SECURE_NO_WARNINGS //altrimenti il compilatore sostiene che le funzioni siano deprecate.
 #define MAX_WORD_LENGTH 255
 #define MAX_LINE_LENGTH 1024
 
