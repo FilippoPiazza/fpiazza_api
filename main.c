@@ -1,6 +1,6 @@
 // Filippo Piazza
 // 2024
-#define _CRT_SECURE_NO_WARNINGS //altrimenti il compilatore sostiene che le funzioni siano deprecate.
+//#define _CRT_SECURE_NO_WARNINGS //altrimenti il compilatore sostiene che le funzioni siano deprecate.
 #define MAX_WORD_LENGTH 255
 #define MAX_LINE_LENGTH 1024
 
@@ -95,7 +95,7 @@ int main(void)
         if(buffer[2] == 'g'){
             char *token = strtok(buffer + 17, " \t\n"); //verifica offset
             // *token è il nome della ricetta
-            char ingr[MAX_LENGTH];
+            char ingr[MAX_WORD_LENGTH];
             int qta;
             int peso = 0;
 
@@ -121,19 +121,19 @@ int main(void)
         }
 
         // se rimuovi_ricetta
-        elif(buffer[2] == 'm'){
+        else if(buffer[2] == 'm'){
             char *token = strtok(buffer + 16, " "); //verifica offset
             printf("%s", token);
         }
 
         // se ordine
-        elif(buffer[2] == 'd'){
+        else if(buffer[2] == 'd'){
             char *token = strtok(buffer + 7, " "); //verifica offset
             printf("%s", token);
         }
 
         // se rifornimento
-        elif(buffer[2] == 'f'){
+        else if(buffer[2] == 'f'){
             char *token = strtok(buffer + 13, " "); //verifica offset
             printf("%s", token);
         }
