@@ -150,3 +150,75 @@ int main(void) //should use getchar unlocked later, for performance
     }
 
 }
+
+void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ingredienti) {
+    ricetta *current = *head;
+
+    while (*current != NULL && strcmp((*current)->name, nome_ricetta) < 0 ) { // verifico l'ordine
+    current = &(*current)->next;
+    }
+
+    if (*current != NULL && strcmp((*current)->name, nome_ricetta) == 0 ) { // controllo se esiste già una ricetta con lo stesso nome
+        // printf ("Ricetta esistente\n") //todo serve?
+        return;
+    }
+
+    ricetta * nuova_ricetta = malloc(sizeof(ricetta)); //alloco memoria
+    // todo controlla se la memoria è stata effttivamente allocata if (nuova_ricetta == NULL) {
+    strcpy(nuova_ricetta->name, nome_ricetta);
+    nuova_ricetta->ingredienti = NULL;
+    nuova_ricetta->prev = NULL;
+
+    strcpy(nuova_ricetta->name, nome_ricetta);
+    nuova_ricetta->ingredienti = NULL;
+    nuova_ricetta->prev = nuova_ricetta->next = NULL;
+
+    // Processa i token degli ingredienti
+    ingrediente_ricetta *ultimo_ingrediente = NULL;
+    for (int i = 0; token_ingredienti[i] != NULL; i += 2) {
+        ingrediente_ricetta *nuovo_ingrediente = malloc(sizeof(ingrediente_ricetta));
+        if (nuovo_ingrediente == NULL) {
+            fprintf(stderr, "Errore: Allocazione della memoria fallita per gli ingredienti\n");
+            // Libera la memoria allocata in precedenza per la ricetta
+            free(nuova_ricetta);
+            return;
+        }
+        strcpy(nuovo_ingrediente->nome, token_ingredienti[i]);
+        nuovo_ingrediente->qta = atoi(token_ingredienti[i + 1]);
+        nuovo_ingrediente->next = NULL;
+
+        if (ultimo_ingrediente == NULL) {
+            nuova_ricetta->ingredienti = nuovo_ingrediente;
+        } else {
+            ultimo_ingrediente->next = nuovo_ingrediente;
+        }
+        ultimo_ingrediente = nuovo_ingrediente;
+    }
+
+    // Inserisce la nuova ricetta nella posizione corretta
+    if (current == *head) {
+        // Inserimento all'inizio della lista
+        nuova_ricetta->next = *head;
+        if (*head != NULL) {
+            (*head)->prev = nuova_ricetta;
+        }
+        *head = nuova_ricetta;
+    } else {
+        // Inserimento nel mezzo o alla fine della lista
+        nuova_ricetta->next = current;
+        if (current != NULL) {
+            nuova_ricetta->prev = current->prev;
+            current->prev = nuova_ricetta;
+        }
+        if (nuova_ricetta->prev != NULL) {
+            nuova_ricetta->prev->next = nuova_ricetta;
+        }
+    }
+
+    printf("aggiunta\n");
+}
+
+
+
+
+}
