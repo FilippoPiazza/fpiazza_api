@@ -35,20 +35,25 @@ typedef struct ricetta
     struct ricetta *prev;
     char name[MAX_WORD_LENGTH];
     struct ingrediente_ricetta* ingredienti; // puntatore agli ingredienti
+    //n_ord contatore per numero di ordini attivi sulla ricetta, 0 di default. Serve per l'eliminazione, va incrementato ad ogni ordine e decrementato a ogni consegna
     int total_qta;
     struct ricetta *next;
 } ricetta;
 
 
-struct ordini
+typedef struct ordini
 {
-    /* data */
+    char name[MAX_WORD_LENGTH];
+    int qta;
+    struct ricetta* ricetta_ord;
     struct ordini *next;
-};
+} ordini;
 
 struct ordini_completi
 {
-    /* data */
+    char name[MAX_WORD_LENGTH];
+    int qta;
+    int dim_tot; //dimensione totale ordine, utile per il carico del furgone
     struct ordini_completi *next;
 };
 
@@ -64,7 +69,7 @@ void verifica_scadenze(int t, struct magazzino *magazzino){}
 
 int main(void) //should use getchar unlocked later, for performance
 {
-    int max_cargo, tempocorriere, cd_corriere, t;
+
     char buffer[MAX_LINE_LENGTH];
     // generazione liste
     ricetta* head = NULL;
@@ -74,22 +79,21 @@ int main(void) //should use getchar unlocked later, for performance
 
     if(fgets(buffer, sizeof(buffer), stdin) == NULL){return 69420;}
     char *ptr = buffer;
-    max_cargo = strtol(ptr, &ptr, 10);
-    max_cargo += 0;
-    tempocorriere = strtol(ptr, &ptr, 10);
+    int max_cargo = strtol(ptr, &ptr, 10);
+    int tempocorriere = strtol(ptr, &ptr, 10);
     //printf("%d%d\n", max_cargo, tempocorriere);
     memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
 
     //la variabile cd_corriere funziona da countdown
-    cd_corriere = tempocorriere;
+    int cd_corriere = tempocorriere;
 
 
     //la variabile t conta il tempo
-    t = 0;
+    int t = 0;
 
     while(1){
         //controllo se arriva il corriere
-        if (cd_corriere == 0){
+        if (cd_corriere == 0){    //todo qua va implementata la logica del corriere
             printf("cd_corriere è 0");
             break;
         }
@@ -102,7 +106,6 @@ int main(void) //should use getchar unlocked later, for performance
         */
 
         if(fgets(buffer, sizeof(buffer), stdin) == NULL){break;}
-
 
         // se aggiungi_ricetta
         if(buffer[2] == 'g'){
@@ -215,4 +218,36 @@ void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ing
     }
 
     printf("aggiunta\n");
+}
+
+void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *nome_ricetta, int quantita) {
+    // Ricerca della ricetta nella lista ordinata
+    ricetta *ricetta_corrente = head_ricetta;
+    while (ricetta_corrente != NULL && strcmp(ricetta_corrente->name, nome_ricetta) < 0) {
+        ricetta_corrente = ricetta_corrente->next;
+    }
+
+    // Verifica se la ricetta è stata trovata e corrisponde esattamente
+    if (ricetta_corrente == NULL || strcmp(ricetta_corrente->name, nome_ricetta) != 0) {
+        printf("ricetta assente\n");
+        return;
+    }
+
+    // Creazione di un nuovo ordine
+    ordini *nuovo_ordine = malloc(sizeof(ordini));
+    if (nuovo_ordine == NULL) {
+        fprintf(stderr, "Errore: Allocazione della memoria fallita per l'ordine\n");
+        return;
+    }
+
+    strcpy(nuovo_ordine->name, nome_ricetta);
+    nuovo_ordine->qta = quantita;
+    nuovo_ordine->ricetta_ord = ricetta_corrente;
+    nuovo_ordine->next = *head_ordine;
+    *head_ordine = nuovo_ordine;
+
+    // Posto dove incrementare il conto degli ordini nella ricetta
+    //ricetta_corrente->n_ord++;  // todo
+
+    printf("ordine aggiunto\n");
 }
