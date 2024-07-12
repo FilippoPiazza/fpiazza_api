@@ -23,20 +23,21 @@ struct ingrediente
     struct ingrediente *next;
 };
 
-struct ingrediente_ricetta
+typedef struct  ingrediente_ricetta
 {
     char nome[MAX_WORD_LENGTH];
     int qta;
     struct ingrediente_ricetta *next;
-};
+} ingrediente_ricetta;
 
-struct ricetta
+typedef struct ricetta
 {
     struct ricetta *prev;
     char name[MAX_WORD_LENGTH];
     struct ingrediente_ricetta* ingredienti; // puntatore agli ingredienti
+    int total_qta;
     struct ricetta *next;
-};
+} ricetta;
 
 
 struct ordini
@@ -66,7 +67,7 @@ int main(void) //should use getchar unlocked later, for performance
     int max_cargo, tempocorriere, cd_corriere, t;
     char buffer[MAX_LINE_LENGTH];
     // generazione liste
-    struct ricetta* head = NULL;
+    ricetta* head = NULL;
     // todo
 
     //input iniziale di configurazione del furgone
@@ -154,11 +155,11 @@ int main(void) //should use getchar unlocked later, for performance
 void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ingredienti) {
     ricetta *current = *head;
 
-    while (*current != NULL && strcmp((*current)->name, nome_ricetta) < 0 ) { // verifico l'ordine
-    current = &(*current)->next;
+    while (current != NULL && strcmp((current)->name, nome_ricetta) < 0 ) { // verifico l'ordine
+    current = (current)->next;
     }
 
-    if (*current != NULL && strcmp((*current)->name, nome_ricetta) == 0 ) { // controllo se esiste già una ricetta con lo stesso nome
+    if (current != NULL && strcmp((current)->name, nome_ricetta) == 0 ) { // controllo se esiste già una ricetta con lo stesso nome
         // printf ("Ricetta esistente\n") //todo serve?
         return;
     }
@@ -167,11 +168,8 @@ void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ing
     // todo controlla se la memoria è stata effttivamente allocata if (nuova_ricetta == NULL) {
     strcpy(nuova_ricetta->name, nome_ricetta);
     nuova_ricetta->ingredienti = NULL;
-    nuova_ricetta->prev = NULL;
-
-    strcpy(nuova_ricetta->name, nome_ricetta);
-    nuova_ricetta->ingredienti = NULL;
     nuova_ricetta->prev = nuova_ricetta->next = NULL;
+    nuova_ricetta->total_qta = 0;  // Inizializza la quantità totale a zero
 
     // Processa i token degli ingredienti
     ingrediente_ricetta *ultimo_ingrediente = NULL;
@@ -186,6 +184,7 @@ void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ing
         strcpy(nuovo_ingrediente->nome, token_ingredienti[i]);
         nuovo_ingrediente->qta = atoi(token_ingredienti[i + 1]);
         nuovo_ingrediente->next = NULL;
+        nuova_ricetta->total_qta += nuovo_ingrediente->qta;  // Aggiunge la quantità al totale
 
         if (ultimo_ingrediente == NULL) {
             nuova_ricetta->ingredienti = nuovo_ingrediente;
@@ -216,9 +215,4 @@ void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ing
     }
 
     printf("aggiunta\n");
-}
-
-
-
-
 }
