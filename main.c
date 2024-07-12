@@ -8,6 +8,8 @@
 #include<string.h>
 #include<stdlib.h>
 
+struct ingrediente_ricetta;
+
 struct magazzino
 {
     struct magazzino *prev;
@@ -21,12 +23,21 @@ struct ingrediente
     struct ingrediente *next;
 };
 
+struct ingrediente_ricetta
+{
+    char nome[MAX_WORD_LENGTH];
+    int qta;
+    struct ingrediente_ricetta *next;
+};
+
 struct ricetta
 {
     struct ricetta *prev;
-    /* data */
+    char name[MAX_WORD_LENGTH];
+    struct ingrediente_ricetta* ingredienti; // puntatore agli ingredienti
     struct ricetta *next;
 };
+
 
 struct ordini
 {
@@ -50,11 +61,12 @@ void carica_furgone(){}
 void verifica_scadenze(int t, struct magazzino *magazzino){}
 
 
-int main(void)
+int main(void) //should use getchar unlocked later, for performance
 {
     int max_cargo, tempocorriere, cd_corriere, t;
     char buffer[MAX_LINE_LENGTH];
     // generazione liste
+    struct ricetta* head = NULL;
     // todo
 
     //input iniziale di configurazione del furgone
@@ -95,30 +107,22 @@ int main(void)
         if(buffer[2] == 'g'){
             char *token = strtok(buffer + 17, " \t\n"); //verifica offset
             // *token è il nome della ricetta
-            char ingr[MAX_WORD_LENGTH];
-            int qta;
-            int peso = 0;
+            //if (token == NULL) return; \\ nome ricetta assente
 
-            token = strtok(NULL, " ");
-            while (token != NULL){
-                //token è nome ingrediente
-                strcpy(ingr, token);
+            char* tokens[MAX_LINE_LENGTH]; // contiene il resto del comando
+            int idx = 0;
 
-                token = strtok(NULL, " ");
-                // token è quantità ingrediente
-                qta = atoi(token);
-
-                peso += qta; // calcolo quanto pesa una unità della ricetta
-
-                //aggiungi logica ingredienti ricetta
-                //todo
-
-                token = strtok(NULL, " ");
-
+            char *nome_ricetta = token;
+            while (token != NULL && idx < (MAX_LINE_LENGTH / 2)) {
+                tokens[idx] = token;
+                idx += 1;
+                token = strtok(NULL, " \t\n");
             }
 
-            printf("aggiunta"); //se non già presente
-        }
+            tokens[idx] = NULL; // aggiungo terminatore nullo alla lista dei token
+
+            aggiungi_ricetta(&head, nome_ricetta, tokens);
+            }
 
         // se rimuovi_ricetta
         else if(buffer[2] == 'm'){
