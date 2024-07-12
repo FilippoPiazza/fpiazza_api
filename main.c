@@ -35,7 +35,7 @@ typedef struct ricetta
     struct ricetta *prev;
     char name[MAX_WORD_LENGTH];
     struct ingrediente_ricetta* ingredienti; // puntatore agli ingredienti
-    //n_ord contatore per numero di ordini attivi sulla ricetta, 0 di default. Serve per l'eliminazione, va incrementato ad ogni ordine e decrementato a ogni consegna
+    int n_ord; // contatore per numero di ordini attivi sulla ricetta, 0 di default. Serve per l'eliminazione, va incrementato ad ogni ordine e decrementato a ogni consegna
     int total_qta;
     struct ricetta *next;
 } ricetta;
@@ -72,7 +72,8 @@ int main(void) //should use getchar unlocked later, for performance
 
     char buffer[MAX_LINE_LENGTH];
     // generazione liste
-    ricetta* head = NULL;
+    ricetta* head_ricetta = NULL;
+    ordini *head_ordine = NULL;
     // todo
 
     //input iniziale di configurazione del furgone
@@ -125,7 +126,7 @@ int main(void) //should use getchar unlocked later, for performance
 
             tokens[idx] = NULL; // aggiungo terminatore nullo alla lista dei token
 
-            aggiungi_ricetta(&head, nome_ricetta, tokens);
+            aggiungi_ricetta(&head_ricetta, nome_ricetta, tokens);
             }
 
         // se rimuovi_ricetta
@@ -136,8 +137,14 @@ int main(void) //should use getchar unlocked later, for performance
 
         // se ordine
         else if(buffer[2] == 'd'){
-            char *token = strtok(buffer + 7, " "); //verifica offset
-            printf("%s", token);
+            char *nome_ricetta = strtok(buffer + 7, " "); //verifica offset
+            char *qta_str = strtok(NULL, " \t\n");
+            if (nome_ricetta == NULL || qta_str == NULL) {
+                printf("Input non valido\n");
+                continue;
+            }
+            int quantita = atoi(qta_str);
+            aggiungi_ordine(&head_ordine, head_ricetta, nome_ricetta, quantita);
         }
 
         // se rifornimento
@@ -188,6 +195,7 @@ void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ing
         nuovo_ingrediente->qta = atoi(token_ingredienti[i + 1]);
         nuovo_ingrediente->next = NULL;
         nuova_ricetta->total_qta += nuovo_ingrediente->qta;  // Aggiunge la quantità al totale
+        nuova_ricetta->n_ord = 0;
 
         if (ultimo_ingrediente == NULL) {
             nuova_ricetta->ingredienti = nuovo_ingrediente;
@@ -247,7 +255,7 @@ void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *no
     *head_ordine = nuovo_ordine;
 
     // Posto dove incrementare il conto degli ordini nella ricetta
-    //ricetta_corrente->n_ord++;  // todo
+    ricetta_corrente->n_ord++;
 
     printf("ordine aggiunto\n");
 }
