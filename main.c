@@ -499,22 +499,23 @@ void rimuovi_ricetta(ricetta** head, const char* nome_ricetta) {
 
     // Cerca la ricetta
     while (current != NULL && strcmp(current->name, nome_ricetta) != 0) { //todo forse basta >
-        fprintf(stderr, "ricetta da eliminare: %s ricetta attuale: %s\n", nome_ricetta, current->name);
+        //fprintf(stderr, "ricetta da eliminare: %s ricetta attuale: %s\n", nome_ricetta, current->name);
         current = current->next;
 
     }
-    fprintf(stderr, "Eliminazione ricetta %s, while superato, current %p\n", nome_ricetta, current);
+    //fprintf(stderr, "Eliminazione ricetta %s, while superato, current %p\n", nome_ricetta, current);
     // Controlla se la ricetta è stata trovata
     if (current == NULL) {
         printf("non presente\n");
-        fprintf(stderr, "ricetta assente: %s\n", nome_ricetta);
+        //fprintf(stderr, "ricetta assente: %s\n", nome_ricetta);
         return;
     }
 
     // Controlla se ci sono ordini presenti
-    else if (current->n_ord != 0) {fprintf(stderr, "Eliminazione ricetta %s, if superato\n", nome_ricetta);
+    else if (current->n_ord != 0) {
+        //fprintf(stderr, "Eliminazione ricetta %s, if superato\n", nome_ricetta);
         printf("ordini in sospeso\n");
-        fprintf(stderr, "ordini in sospeso: %s ricetta attuale: %s\n", nome_ricetta, current->name);
+        //fprintf(stderr, "ordini in sospeso: %s ricetta attuale: %s\n", nome_ricetta, current->name);
         return;
     }
 
@@ -537,7 +538,7 @@ void rimuovi_ricetta(ricetta** head, const char* nome_ricetta) {
         free(temp);
     }
     free(current);
-    fprintf(stderr, "ricetta rimossa: %s\n", nome_ricetta);
+    //fprintf(stderr, "ricetta rimossa: %s\n", nome_ricetta);
     printf("rimossa\n");
 }
 
