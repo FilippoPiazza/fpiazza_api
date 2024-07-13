@@ -577,7 +577,7 @@ int main(void) //should use getchar unlocked later, for performance
         }
 
         //verifico per ogni ingrediente le cose scadute
-        verifica_scadenze(t, head_magazzino);
+        verifica_scadenze(t, &head_magazzino);
 
         prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi);
 
