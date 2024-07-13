@@ -50,13 +50,13 @@ typedef struct ordini
     struct ordini *next;
 } ordini;
 
-struct ordini_completi
+typedef struct ordini_completi
 {
     char name[MAX_WORD_LENGTH];
     int qta;
     int dim_tot; //dimensione totale ordine, utile per il carico del furgone
     struct ordini_completi *next;
-};
+}ordini_completi ;
 
 void aggiungi_ricetta(){}
 void rimuovi_ricetta(){}
@@ -76,6 +76,7 @@ int main(void) //should use getchar unlocked later, for performance
     ricetta* head_ricetta = NULL;
     ordini *head_ordine = NULL;
     magazzino *head_magazzino = NULL;
+    ordini_completi *head_ordine_completi = NULL;
     // todo
 
     //input iniziale di configurazione del furgone
@@ -157,8 +158,12 @@ int main(void) //should use getchar unlocked later, for performance
         //verifico per ogni ingrediente le cose scadute
         verifica_scadenze(t, head_magazzino);
 
+        prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi);
+
         t += 1;
         memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
+
+        
     }
 
 }
@@ -415,4 +420,114 @@ void rimuovi_ricetta(ricetta** head, const char* nome_ricetta) {
     free(current);
 
     printf("rimossa\n");
+}
+
+void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi) {
+    ordini *current_ordine = *head_ordine;
+    ordini *prev_ordine = NULL;
+
+    while (current_ordine != NULL) {
+        ricetta *current_ricetta = current_ordine->ricetta_ord;
+        ingrediente_ricetta *ingrediente_ricetta_ptr = current_ricetta->ingredienti;
+
+        int can_fulfill = 1;  // Supponiamo di poter soddisfare l'ordine
+
+        // Controlla se ci sono abbastanza ingredienti nel magazzino
+        while (ingrediente_ricetta_ptr != NULL) {
+            magazzino *magazzino_ptr = *head_magazzino;
+
+            int needed_quantity = ingrediente_ricetta_ptr->qta * current_ordine->qta;
+            int found_quantity = 0;
+
+            // Cerca l'ingrediente nel magazzino
+            while (magazzino_ptr != NULL && strcmp(magazzino_ptr->ingr_name, ingrediente_ricetta_ptr->nome) != 0) {
+                magazzino_ptr = magazzino_ptr->next;
+            }
+
+            // Raggruppa lotti con lo stesso ingrediente
+            if (magazzino_ptr != NULL) {
+                ingrediente *ingrediente_ptr = magazzino_ptr->ingredienti;
+
+                while (ingrediente_ptr != NULL && found_quantity < needed_quantity) {
+                    found_quantity += ingrediente_ptr->qta;
+                    ingrediente_ptr = ingrediente_ptr->next;
+                }
+            }
+
+            if (found_quantity < needed_quantity) {
+                can_fulfill = 0;  // Non ci sono abbastanza ingredienti
+                break;
+            }
+
+            ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
+        }
+
+        if (can_fulfill) {
+            // Rimuove gli ingredienti usati dal magazzino
+            ingrediente_ricetta_ptr = current_ricetta->ingredienti;
+
+            while (ingrediente_ricetta_ptr != NULL) {
+                magazzino *magazzino_ptr = *head_magazzino;
+
+                int needed_quantity = ingrediente_ricetta_ptr->qta * current_ordine->qta;
+
+                // Cerca l'ingrediente nel magazzino
+                while (magazzino_ptr != NULL && strcmp(magazzino_ptr->ingr_name, ingrediente_ricetta_ptr->nome) != 0) {
+                    magazzino_ptr = magazzino_ptr->next;
+                }
+
+                if (magazzino_ptr != NULL) {
+                    ingrediente *ingrediente_ptr = magazzino_ptr->ingredienti;
+                    ingrediente *ingrediente_prev = NULL;
+
+                    while (ingrediente_ptr != NULL && needed_quantity > 0) {
+                        if (ingrediente_ptr->qta <= needed_quantity) {
+                            needed_quantity -= ingrediente_ptr->qta;
+
+                            ingrediente *to_remove = ingrediente_ptr;
+                            if (ingrediente_prev == NULL) {
+                                magazzino_ptr->ingredienti = ingrediente_ptr->next;
+                            } else {
+                                ingrediente_prev->next = ingrediente_ptr->next;
+                            }
+                            ingrediente_ptr = ingrediente_ptr->next;
+                            free(to_remove);
+                        } else {
+                            ingrediente_ptr->qta -= needed_quantity;
+                            needed_quantity = 0;
+                        }
+                    }
+                }
+
+                ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
+            }
+
+            // Rimuove l'ordine dalla lista ordini
+            if (prev_ordine == NULL) {
+                *head_ordine = current_ordine->next;
+            } else {
+                prev_ordine->next = current_ordine->next;
+            }
+
+            // Aggiunge l'ordine completato alla lista ordini_completi
+            ordini_completi *new_ordine_completo = malloc(sizeof(ordini_completi));
+            if (new_ordine_completo == NULL) {
+                fprintf(stderr, "Errore: Allocazione della memoria fallita per l'ordine completo\n");
+                return;
+            }
+
+            strcpy(new_ordine_completo->name, current_ordine->name);
+            new_ordine_completo->qta = current_ordine->qta;
+            new_ordine_completo->dim_tot = current_ricetta->total_qta * current_ordine->qta;
+            new_ordine_completo->next = *head_ordine_completi;
+            *head_ordine_completi = new_ordine_completo;
+
+            ordini *to_remove = current_ordine;
+            current_ordine = current_ordine->next;
+            free(to_remove);
+        } else {
+            prev_ordine = current_ordine;
+            current_ordine = current_ordine->next;
+        }
+    }
 }
