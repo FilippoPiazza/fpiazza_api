@@ -1,6 +1,5 @@
 // Filippo Piazza
 // 2024
-//#define _CRT_SECURE_NO_WARNINGS //altrimenti il compilatore sostiene che le funzioni siano deprecate.
 #define MAX_WORD_LENGTH 255
 #define MAX_LINE_LENGTH 8192
 
@@ -327,11 +326,12 @@ void rimuovi_ricetta(ricetta** head, const char* nome_ricetta) {
     printf("rimossa\n");
 }
 
-void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi) {
+void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi, int current_time) {
     ordini *current_ordine = *head_ordine;
     ordini *prev_ordine = NULL;
 
     while (current_ordine != NULL) {
+        if
         ricetta *current_ricetta = current_ordine->ricetta_ord;
         ingrediente_ricetta *ingrediente_ricetta_ptr = current_ricetta->ingredienti;
 
@@ -368,6 +368,7 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
         }
 
         if (can_fulfill) {
+            current_ricetta->n_ord--;
             // Rimuove gli ingredienti usati dal magazzino
             ingrediente_ricetta_ptr = current_ricetta->ingredienti;
 
@@ -480,7 +481,7 @@ void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_
         }
 
         // stampa dettagli ordini
-        printf("%d, %s, %d\n", current->time_placed, current->name, current->qta);
+        printf("%d %s %d\n", current->time_placed, current->name, current->qta);
         current_cargo += current->dim_tot;
 
         // pulisce la lista di carico
@@ -523,11 +524,12 @@ int main(void) //should use getchar unlocked later, for performance
     int t = 0;
 
     while(1){
+        printf("Current countdown: %d\n", cd_corriere);
         //printf("%d %d", t, cd_corriere);
         //controllo se arriva il corriere
         if (cd_corriere == 0){    //todo qua va implementata la logica del corriere
             carica_furgone(&head_ordine_completi, &head_ordine_in_carico, max_cargo);
-            cd_corriere = tempocorriere;
+            cd_corriere = tempocorriere-1;
         }
         else {cd_corriere -= 1;}
         /* comandi:
