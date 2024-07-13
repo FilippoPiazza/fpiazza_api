@@ -68,6 +68,19 @@ typedef struct ordini_in_carico
     struct ordini_in_carico *next;
 }ordini_in_carico;
 
+void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ingredienti);
+void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *nome_ricetta, const int quantita, const int t);
+void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi, const int current_time);
+void rifornisci(char *buffer, magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi, const int t);
+void verifica_scadenze(const int t, magazzino **head);
+void rimuovi_ricetta(ricetta** head, const char* nome_ricetta);
+void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_carico, const int max_cargo, int tempo);
+void print_ordini_completi(ordini_completi *head, int tempo);
+void print_ordini_in_carico(ordini_in_carico *head, int tempo);
+
+
+
+
 void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ingredienti) {
     ricetta *current = *head;
 
@@ -160,9 +173,20 @@ void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *no
     strcpy(nuovo_ordine->name, nome_ricetta);
     nuovo_ordine->qta = quantita;
     nuovo_ordine->ricetta_ord = ricetta_corrente;
-    nuovo_ordine->next = *head_ordine;
+    nuovo_ordine->next = NULL;
     nuovo_ordine->time_placed = t;
-    *head_ordine = nuovo_ordine;
+
+
+    // Append to the end of the list
+    if (*head_ordine == NULL) {
+        *head_ordine = nuovo_ordine; // The list is empty, new order becomes the head
+    } else {
+        ordini *last_ordine = *head_ordine;
+        while (last_ordine->next != NULL) { // Traverse to the end of the list
+            last_ordine = last_ordine->next;
+        }
+        last_ordine->next = nuovo_ordine; // Append the new order
+    }
 
     // Posto dove incrementare il conto degli ordini nella ricetta
     ricetta_corrente->n_ord++;
@@ -170,11 +194,39 @@ void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *no
     printf("accettato\n");
 }
 
-void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi, const int current_time) {
+void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi, const int current_time) {// Check if head_magazzino is NULL
+    if (!head_magazzino) {
+        printf("head_magazzino is NULL.\n");
+        return; // Early exit if head_magazzino is NULL
+    }
+
+    // Check if the object head_magazzino points to is NULL
+    if (!*head_magazzino) {
+        fprintf(stderr,"*head_magazzino is NULL.\n");
+        return; // Early exit if the object pointed to by head_magazzino is NULL
+    }
+
+    // Check if head_ordine is NULL
+    if (!head_ordine) {
+        fprintf(stderr,"head_ordine is NULL.\n");
+        return; // Early exit if head_ordine is NULL
+    }
+
+    // Check if the object head_ordine points to is NULL
+    if (!*head_ordine) {
+        fprintf(stderr,"*head_ordine is NULL.\n");
+        return; // Early exit if the object pointed to by head_ordine is NULL
+    }
+
     ordini *current_ordine = *head_ordine;
     ordini *prev_ordine = NULL;
 
     while (current_ordine != NULL) {
+        if (!current_ordine->ricetta_ord) {
+            printf("ricetta_ord pointer is NULL for order %s.\n", current_ordine->name);
+            current_ordine = current_ordine->next;
+            continue; // Skip processing this order
+        }
         if (current_time != -1 && current_ordine->time_placed > current_time) {
             break;  // If current_time is specified and order's time exceeds it, stop processing.
         }
@@ -204,15 +256,17 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
                     ingrediente_ptr = ingrediente_ptr->next;
                 }
             }
-
+            fprintf(stderr, "tempo %d qta ingrediente %s per ricetta %s %d\n",current_time, ingrediente_ricetta_ptr-> nome, current_ricetta->name, found_quantity);
             if (found_quantity < needed_quantity) {
                 can_fulfill = 0;  // Non ci sono abbastanza ingredienti
+                fprintf(stderr, "non abbastanza ingredienti per ricetta %s: found %d needed %d\n", current_ricetta->name, found_quantity, needed_quantity);
                 break;
             }
 
             ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
         }
 
+        fprintf(stderr, "now onto can fulfill %d \n", can_fulfill);
         if (can_fulfill) {
             current_ricetta->n_ord--;
             // Rimuove gli ingredienti usati dal magazzino
@@ -278,14 +332,36 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
             new_ordine_completo->qta = current_ordine->qta;
             new_ordine_completo->dim_tot = current_ricetta->total_qta * current_ordine->qta;
             new_ordine_completo->time_placed = current_ordine->time_placed;
-            new_ordine_completo->next = *head_ordine_completi;
-            *head_ordine_completi = new_ordine_completo;
+            new_ordine_completo->next = NULL;
 
-            ordini *to_remove = current_ordine;
-            current_ordine = current_ordine->next;
-            free(to_remove);
-        } else {
-            prev_ordine = current_ordine;
+            if (!*head_ordine_completi || (*head_ordine_completi)->time_placed >= new_ordine_completo->time_placed) {
+                new_ordine_completo->next = *head_ordine_completi;
+                *head_ordine_completi = new_ordine_completo;
+            } else {
+                ordini_completi *temp = *head_ordine_completi;
+                while (temp->next && temp->next->time_placed < new_ordine_completo->time_placed) {
+                    temp = temp->next;
+                }
+                new_ordine_completo->next = temp->next;
+                temp->next = new_ordine_completo;
+            }
+
+            if (prev_ordine == NULL) {
+                *head_ordine = current_ordine->next;
+            } else {
+                prev_ordine->next = current_ordine->next;
+            }
+
+            free(current_ordine);
+            if (prev_ordine != NULL) {
+                current_ordine = prev_ordine->next; // Move to the next order if there is a previous order
+            } else {
+                current_ordine = *head_ordine; // If there was no previous order, start from the head again
+            }
+        }
+        else {
+             prev_ordine = current_ordine;
+            fprintf(stderr, "%p %p\n", (void *)current_ordine, (void *)current_ordine->next);
             current_ordine = current_ordine->next;
         }
     }
@@ -316,7 +392,7 @@ void rifornisci(char *buffer, magazzino **head_magazzino, ricetta *head_ricetta,
         if (current != NULL && strcmp(current->ingr_name, ingr_name) == 0) {
             // Inserisce gli ingredienti in ordine di scadenza
             ingrediente *ingr_ptr = current->ingredienti, *ingr_prev = NULL;
-            while (ingr_ptr != NULL && ingr_ptr->expiry > expiry) {
+            while (ingr_ptr != NULL && ingr_ptr->expiry < expiry) {
                 ingr_prev = ingr_ptr;
                 ingr_ptr = ingr_ptr->next;
             }
@@ -448,8 +524,9 @@ void rimuovi_ricetta(ricetta** head, const char* nome_ricetta) {
     printf("rimossa\n");
 }
 
-void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_carico, const int max_cargo) {
+void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_carico, const int max_cargo, int tempo) {
     ordini_completi *current = *head_completi;
+
     int current_cargo = 0;
     if (current == NULL) {
         printf("camioncino vuoto");
@@ -469,6 +546,7 @@ void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_
         strcpy(new_in_carico->name, current->name);
         new_in_carico->qta = current->qta;
         new_in_carico->dim_tot = current->dim_tot;
+        new_in_carico->time_placed = current->time_placed;
         new_in_carico->next = NULL;
 
         // Insert new order into ordini_in_carico, sorted by dim_tot (descending) and then by time_placed (ascending for same dim_tot)
@@ -482,28 +560,45 @@ void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_
                 // Find the correct position to insert
                 ordini_in_carico *curr_in_carico = *head_in_carico, *prev_in_carico = NULL;
                 while (curr_in_carico != NULL &&
-                       (curr_in_carico->dim_tot > new_in_carico->dim_tot || // Continue over larger dim_tot
-                        (curr_in_carico->dim_tot == new_in_carico->dim_tot && curr_in_carico->time_placed < new_in_carico->time_placed))) { // Continue over earlier times for the same dim_tot
+                        (curr_in_carico->dim_tot > new_in_carico->dim_tot || // Continue if current item is larger
+                        (curr_in_carico->dim_tot == new_in_carico->dim_tot && curr_in_carico->time_placed < new_in_carico->time_placed))) { // Continue if the current time is later
                     prev_in_carico = curr_in_carico;
                     curr_in_carico = curr_in_carico->next;
-                        }
+        }
                 // Insert new item before the first item that has either a smaller dim_tot or the same dim_tot but a later time_placed
                 new_in_carico->next = curr_in_carico;
-                if (prev_in_carico != NULL) {
+                if (prev_in_carico == NULL) {
+                    // This means new_in_carico should be the new head either because it's larger or equally large but earlier than any current orders
+                    new_in_carico->next = *head_in_carico;
+                    *head_in_carico = new_in_carico;
+                } else {
+                    // Insert the new order in the found spot
+                    new_in_carico->next = curr_in_carico;
                     prev_in_carico->next = new_in_carico;
                 }
             }
 
 
         // stampa dettagli ordini
-        printf("%d %s %d\n", current->time_placed, current->name, current->qta);
-        current_cargo += current->dim_tot;
 
-        // pulisce la lista di carico
-        ordini_completi * to_remove = current;
+        current_cargo += current->dim_tot;
+        ordini_completi *to_remove = current;
         current = current->next;
         free(to_remove);
     }
+
+    // Print and free ordini_in_carico list
+    print_ordini_in_carico(*head_in_carico, tempo);
+    ordini_in_carico *print_current = *head_in_carico;
+    while (print_current != NULL) {
+        printf("%d %s %d\n", print_current->time_placed, print_current->name, print_current->qta);
+        ordini_in_carico *to_free = print_current;
+        print_current = print_current->next;
+        free(to_free);
+    }
+    *head_in_carico = NULL; // Reset head_in_carico list
+    current_cargo = 0;
+    *head_completi = current;
 }
 
 int main(void) //should use getchar unlocked later, for performance
@@ -516,6 +611,8 @@ int main(void) //should use getchar unlocked later, for performance
     magazzino *head_magazzino = NULL;
     ordini_completi *head_ordine_completi = NULL;
     ordini_in_carico *head_ordine_in_carico = NULL;
+
+    int rifornimento_flag = 0;
 
     //input iniziale di configurazione del furgone
 
@@ -537,7 +634,7 @@ int main(void) //should use getchar unlocked later, for performance
 
         //controllo se arriva il corriere
         if (cd_corriere == 0){    //todo qua va implementata la logica del corriere
-            carica_furgone(&head_ordine_completi, &head_ordine_in_carico, max_cargo);
+            carica_furgone(&head_ordine_completi, &head_ordine_in_carico, max_cargo, t);
             cd_corriere = tempocorriere-1;
         }
         else {cd_corriere -= 1;}
@@ -592,18 +689,41 @@ int main(void) //should use getchar unlocked later, for performance
         // se rifornimento
         else if(buffer[2] == 'f'){
             rifornisci(buffer, &head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, t);
+            rifornimento_flag = 1;
+
         }
 
         //verifico per ogni ingrediente le cose scadute
         verifica_scadenze(t, &head_magazzino);
 
-        prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, t);
-
+        if(rifornimento_flag == 0) {
+            prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, t);
+        }
+        print_ordini_completi(head_ordine_completi, t);
         t += 1;
-
+        rifornimento_flag = 0;
         memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
 
 
     }
 
+}
+
+void print_ordini_completi(ordini_completi *head, int tempo) {
+    fprintf(stderr, "Orders in 'ordini_completi al tempo %d':\n", tempo);
+    while (head != NULL) {
+        fprintf(stderr, "Time Placed: %d, Name: %s, Quantity: %d, Total Dimension: %d\n",
+               head->time_placed, head->name, head->qta, head->dim_tot);
+        head = head->next;
+    }
+    fprintf(stderr,"\n");
+}
+void print_ordini_in_carico(ordini_in_carico *head, int tempo) {
+    fprintf(stderr, "Orders in 'ordini_in_carico al tempo %d':\n", tempo);
+    while (head != NULL) {
+        fprintf(stderr,"Time Placed: %d, Name: %s, Quantity: %d, Total Dimension: %d\n",
+               head->time_placed, head->name, head->qta, head->dim_tot);
+        head = head->next;
+    }
+    fprintf(stderr,"\n");
 }
