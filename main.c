@@ -77,7 +77,7 @@ void rimuovi_ricetta(ricetta** head, const char* nome_ricetta);
 void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_carico, const int max_cargo, int tempo);
 void print_ordini_completi(ordini_completi *head, int tempo);
 void print_ordini_in_carico(ordini_in_carico *head, int tempo);
-
+void trim_newline(char *str);
 
 
 
@@ -89,7 +89,7 @@ void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ing
     }
 
     if (current != NULL && strcmp((current)->name, nome_ricetta) == 0 ) { // controllo se esiste già una ricetta con lo stesso nome
-        // printf ("Ricetta esistente\n") //todo serve?
+        printf("ignorato\n");
         return;
     }
 
@@ -159,7 +159,7 @@ void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *no
 
     // Verifica se la ricetta è stata trovata e corrisponde esattamente
     if (ricetta_corrente == NULL || strcmp(ricetta_corrente->name, nome_ricetta) != 0) {
-        printf("rifiutato");
+        printf("rifiutato\n");
         return;
     }
 
@@ -256,17 +256,17 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
                     ingrediente_ptr = ingrediente_ptr->next;
                 }
             }
-            fprintf(stderr, "tempo %d qta ingrediente %s per ricetta %s %d\n",current_time, ingrediente_ricetta_ptr-> nome, current_ricetta->name, found_quantity);
+            // fprintf(stderr, "tempo %d qta ingrediente %s per ricetta %s %d\n",current_time, ingrediente_ricetta_ptr-> nome, current_ricetta->name, found_quantity);
             if (found_quantity < needed_quantity) {
                 can_fulfill = 0;  // Non ci sono abbastanza ingredienti
-                fprintf(stderr, "non abbastanza ingredienti per ricetta %s: found %d needed %d\n", current_ricetta->name, found_quantity, needed_quantity);
+                // fprintf(stderr, "non abbastanza ingredienti per ricetta %s: found %d needed %d\n", current_ricetta->name, found_quantity, needed_quantity);
                 break;
             }
 
             ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
         }
 
-        fprintf(stderr, "now onto can fulfill %d \n", can_fulfill);
+        //fprintf(stderr, "now onto can fulfill %d \n", can_fulfill);
         if (can_fulfill) {
             current_ricetta->n_ord--;
             // Rimuove gli ingredienti usati dal magazzino
@@ -277,16 +277,20 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
 
                 int needed_quantity = ingrediente_ricetta_ptr->qta * current_ordine->qta;
 
+
                 // Cerca l'ingrediente nel magazzino
                 while (magazzino_ptr != NULL && strcmp(magazzino_ptr->ingr_name, ingrediente_ricetta_ptr->nome) != 0) {
+
                     magazzino_ptr = magazzino_ptr->next;
                 }
 
                 if (magazzino_ptr != NULL) {
+
                     ingrediente *ingrediente_ptr = magazzino_ptr->ingredienti;
                     ingrediente *ingrediente_prev = NULL;
 
                     while (ingrediente_ptr != NULL && needed_quantity > 0) {
+                        //fprintf(stderr, "sane serbia %p %d       ", (void *)ingrediente_ptr, needed_quantity);
                         if (ingrediente_ptr->qta <= needed_quantity) {
                             needed_quantity -= ingrediente_ptr->qta;  // Decrease needed by available
 
@@ -299,24 +303,32 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
                             } else {
                                 ingrediente_prev->next = ingrediente_ptr;  // Link previous to next
                             }
+
                             free(to_remove);  // Free the removed ingredient
                         } else {
                             ingrediente_ptr->qta -= needed_quantity;  // Reduce quantity of current ingredient
                             needed_quantity = 0;  // Set needed to zero as we've found enough
                         }
-                        if (needed_quantity > 0) {  // Only update prev if we continue looping
+
+                        if (needed_quantity > 0 && 0) {  // Only update prev if we continue looping
+                            fprintf(stderr, "sane ghana %p %p       ", (void *)ingrediente_ptr, (void*)ingrediente_prev);
                             ingrediente_prev = ingrediente_ptr;
+                            fprintf(stderr, "sane congo %p %p       ", (void *)ingrediente_ptr, (void*)ingrediente_ptr->next);
                             ingrediente_ptr = ingrediente_ptr->next;
+                            fprintf(stderr, "sane kosovo");
                         }
+
                     }
                 }
 
                 ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
+
             }
 
             // Rimuove l'ordine dalla lista ordini
             if (prev_ordine == NULL) {
                 *head_ordine = current_ordine->next;
+
             } else {
                 prev_ordine->next = current_ordine->next;
             }
@@ -333,6 +345,7 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
             new_ordine_completo->dim_tot = current_ricetta->total_qta * current_ordine->qta;
             new_ordine_completo->time_placed = current_ordine->time_placed;
             new_ordine_completo->next = NULL;
+
 
             if (!*head_ordine_completi || (*head_ordine_completi)->time_placed >= new_ordine_completo->time_placed) {
                 new_ordine_completo->next = *head_ordine_completi;
@@ -361,7 +374,7 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
         }
         else {
              prev_ordine = current_ordine;
-            fprintf(stderr, "%p %p\n", (void *)current_ordine, (void *)current_ordine->next);
+            //fprintf(stderr, "%p %p\n", (void *)current_ordine, (void *)current_ordine->next);
             current_ordine = current_ordine->next;
         }
     }
@@ -485,19 +498,23 @@ void rimuovi_ricetta(ricetta** head, const char* nome_ricetta) {
     ricetta *current = *head;
 
     // Cerca la ricetta
-    while (current != NULL && strcmp(current->name, nome_ricetta) < 0) {
+    while (current != NULL && strcmp(current->name, nome_ricetta) != 0) { //todo forse basta >
+        fprintf(stderr, "ricetta da eliminare: %s ricetta attuale: %s\n", nome_ricetta, current->name);
         current = current->next;
-    }
 
+    }
+    fprintf(stderr, "Eliminazione ricetta %s, while superato, current %p\n", nome_ricetta, current);
     // Controlla se la ricetta è stata trovata
-    if (current == NULL || strcmp(current->name, nome_ricetta) != 0) {
-        printf("ricetta assente\n");
+    if (current == NULL) {
+        printf("non presente\n");
+        fprintf(stderr, "ricetta assente: %s\n", nome_ricetta);
         return;
     }
 
     // Controlla se ci sono ordini presenti
-    if (current->n_ord != 0) {
-        printf("ordini presenti\n");
+    else if (current->n_ord != 0) {fprintf(stderr, "Eliminazione ricetta %s, if superato\n", nome_ricetta);
+        printf("ordini in sospeso\n");
+        fprintf(stderr, "ordini in sospeso: %s ricetta attuale: %s\n", nome_ricetta, current->name);
         return;
     }
 
@@ -520,7 +537,7 @@ void rimuovi_ricetta(ricetta** head, const char* nome_ricetta) {
         free(temp);
     }
     free(current);
-
+    fprintf(stderr, "ricetta rimossa: %s\n", nome_ricetta);
     printf("rimossa\n");
 }
 
@@ -646,6 +663,7 @@ int main(void) //should use getchar unlocked later, for performance
         */
 
         if(fgets(buffer, sizeof(buffer), stdin) == NULL){break;}
+        trim_newline(buffer);
 
         // se aggiungi_ricetta
         if(buffer[2] == 'g'){
@@ -710,6 +728,7 @@ int main(void) //should use getchar unlocked later, for performance
 }
 
 void print_ordini_completi(ordini_completi *head, int tempo) {
+    return;
     fprintf(stderr, "Orders in 'ordini_completi al tempo %d':\n", tempo);
     while (head != NULL) {
         fprintf(stderr, "Time Placed: %d, Name: %s, Quantity: %d, Total Dimension: %d\n",
@@ -719,6 +738,7 @@ void print_ordini_completi(ordini_completi *head, int tempo) {
     fprintf(stderr,"\n");
 }
 void print_ordini_in_carico(ordini_in_carico *head, int tempo) {
+    return;
     fprintf(stderr, "Orders in 'ordini_in_carico al tempo %d':\n", tempo);
     while (head != NULL) {
         fprintf(stderr,"Time Placed: %d, Name: %s, Quantity: %d, Total Dimension: %d\n",
@@ -726,4 +746,11 @@ void print_ordini_in_carico(ordini_in_carico *head, int tempo) {
         head = head->next;
     }
     fprintf(stderr,"\n");
+}
+
+void trim_newline(char *str) {
+    int len = strlen(str);
+    if (len > 0 && str[len - 1] == '\n') {
+        str[len - 1] = '\0'; // Replace newline with null terminator
+    }
 }
