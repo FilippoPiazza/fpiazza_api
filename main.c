@@ -134,7 +134,7 @@ int main(void) //should use getchar unlocked later, for performance
         // se rimuovi_ricetta
         else if(buffer[2] == 'm'){
             char *token = strtok(buffer + 16, " "); //verifica offset
-            printf("%s", token);
+            rimuovi_ricetta(&head_ricetta, token);
         }
 
         // se ordine
@@ -155,7 +155,7 @@ int main(void) //should use getchar unlocked later, for performance
         }
 
         //verifico per ogni ingrediente le cose scadute
-
+        verifica_scadenze(t, head_magazzino);
 
         t += 1;
         memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
@@ -343,4 +343,76 @@ void rifornisci(char *buffer, magazzino **head) {
         }
     }
     printf("rifornito\n");
+}
+
+void verifica_scadenze(int t, magazzino **head) {
+    magazzino *current = *head;
+
+    while (current != NULL) {
+        ingrediente *ingr_ptr = current->ingredienti;
+        ingrediente *ingr_prev = NULL;
+
+        // Check for expired lots and remove them
+        while (ingr_ptr != NULL) {
+            if (ingr_ptr->expiry <= t) {
+                ingrediente *to_remove = ingr_ptr;
+                if (ingr_prev == NULL) {
+                    current->ingredienti = ingr_ptr->next;
+                } else {
+                    ingr_prev->next = ingr_ptr->next;
+                }
+                ingr_ptr = ingr_ptr->next;
+                free(to_remove);
+            } else {
+                ingr_prev = ingr_ptr;
+                ingr_ptr = ingr_ptr->next;
+            }
+        }
+
+        // Move to the next magazzino node
+        current = current->next;
+    }
+}
+
+void rimuovi_ricetta(ricetta** head, const char* nome_ricetta) {
+    ricetta *current = *head;
+
+    // Cerca la ricetta
+    while (current != NULL && strcmp(current->name, nome_ricetta) < 0) {
+        current = current->next;
+    }
+
+    // Controlla se la ricetta è stata trovata
+    if (current == NULL || strcmp(current->name, nome_ricetta) != 0) {
+        printf("ricetta assente\n");
+        return;
+    }
+
+    // Controlla se ci sono ordini presenti
+    if (current->n_ord != 0) {
+        printf("ordini presenti\n");
+        return;
+    }
+
+    // Rimuove la ricetta dalla lista
+    if (current->prev != NULL) {
+        current->prev->next = current->next;
+    } else {
+        *head = current->next;
+    }
+
+    if (current->next != NULL) {
+        current->next->prev = current->prev;
+    }
+
+    // Libera la memoria degli ingredienti
+    ingrediente_ricetta *ing = current->ingredienti;
+    while (ing != NULL) {
+        ingrediente_ricetta *temp = ing;
+        ing = ing->next;
+        free(temp);
+    }
+    free(current);
+
+    printf("rimossa\n");
 }
