@@ -48,6 +48,7 @@ typedef struct ordini
     int qta;
     struct ricetta* ricetta_ord;
     struct ordini *next;
+    int time_placed;
 } ordini;
 
 typedef struct ordini_completi
@@ -55,8 +56,18 @@ typedef struct ordini_completi
     char name[MAX_WORD_LENGTH];
     int qta;
     int dim_tot; //dimensione totale ordine, utile per il carico del furgone
+    int time_placed;
     struct ordini_completi *next;
 }ordini_completi ;
+
+typedef struct ordini_in_carico
+{
+    char name[MAX_WORD_LENGTH];
+    int qta;
+    int dim_tot;
+    int time_placed;
+    struct ordini_in_carico *next;
+}ordini_in_carico;
 
 void aggiungi_ricetta(){}
 void rimuovi_ricetta(){}
@@ -77,6 +88,7 @@ int main(void) //should use getchar unlocked later, for performance
     ordini *head_ordine = NULL;
     magazzino *head_magazzino = NULL;
     ordini_completi *head_ordine_completi = NULL;
+    ordini_in_carico *head_ordine_in_carico = NULL;
     // todo
 
     //input iniziale di configurazione del furgone
@@ -98,8 +110,7 @@ int main(void) //should use getchar unlocked later, for performance
     while(1){
         //controllo se arriva il corriere
         if (cd_corriere == 0){    //todo qua va implementata la logica del corriere
-            printf("cd_corriere è 0");
-            break;
+            carica_furgone(&head_ordine_completi, &head_ordine_in_carico, max_cargo);
         }
 
         /* comandi:
@@ -147,7 +158,7 @@ int main(void) //should use getchar unlocked later, for performance
                 continue;
             }
             int quantita = atoi(qta_str);
-            aggiungi_ordine(&head_ordine, head_ricetta, nome_ricetta, quantita);
+            aggiungi_ordine(&head_ordine, head_ricetta, nome_ricetta, quantita, t);
         }
 
         // se rifornimento
@@ -163,7 +174,7 @@ int main(void) //should use getchar unlocked later, for performance
         t += 1;
         memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
 
-        
+
     }
 
 }
@@ -234,7 +245,7 @@ void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ing
     printf("aggiunta\n");
 }
 
-void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *nome_ricetta, int quantita) {
+void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *nome_ricetta, int quantita, int t) {
     // Ricerca della ricetta nella lista ordinata
     ricetta *ricetta_corrente = head_ricetta;
     while (ricetta_corrente != NULL && strcmp(ricetta_corrente->name, nome_ricetta) < 0) {
@@ -258,6 +269,7 @@ void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *no
     nuovo_ordine->qta = quantita;
     nuovo_ordine->ricetta_ord = ricetta_corrente;
     nuovo_ordine->next = *head_ordine;
+    nuovo_ordine->time_placed = t;
     *head_ordine = nuovo_ordine;
 
     // Posto dove incrementare il conto degli ordini nella ricetta
@@ -519,6 +531,7 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
             strcpy(new_ordine_completo->name, current_ordine->name);
             new_ordine_completo->qta = current_ordine->qta;
             new_ordine_completo->dim_tot = current_ricetta->total_qta * current_ordine->qta;
+            new_ordine_completo->time_placed = current_ordine->time_placed;
             new_ordine_completo->next = *head_ordine_completi;
             *head_ordine_completi = new_ordine_completo;
 
@@ -529,5 +542,59 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
             prev_ordine = current_ordine;
             current_ordine = current_ordine->next;
         }
+    }
+}
+
+void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_carico, int max_cargo) {
+    ordini_completi *current = *head_completi, *prev_completi = NULL, *to_remove;
+    int current_cargo = 0;
+
+    while (current != NULL) {
+        if ((current_cargo + current->dim_tot) > max_cargo) {
+            break; // Stop if adding this order exceeds max cargo capacity
+        }
+
+        // Create new in-carico order
+        ordini_in_carico *new_in_carico = malloc(sizeof(ordini_in_carico));
+        if (new_in_carico == NULL) {
+            fprintf(stderr, "Memory allocation failed for new in-carico order\n");
+            return; // Early exit on memory allocation failure
+        }
+        strcpy(new_in_carico->name, current->name);
+        new_in_carico->qta = current->qta;
+        new_in_carico->dim_tot = current->dim_tot;
+        new_in_carico->next = NULL;
+
+        // Insert new order into ordini_in_carico, sorted by dim_tot and then by time_placed
+        if (*head_in_carico == NULL || (*head_in_carico)->dim_tot < new_in_carico->dim_tot || ((*head_in_carico)->dim_tot == new_in_carico->dim_tot && (*head_in_carico)->time_placed > current->time_placed)) {
+            // Insert at the head if it's the largest or equally large but earlier
+            new_in_carico->next = *head_in_carico;
+            *head_in_carico = new_in_carico;
+        } else {
+            // Find the correct position to insert
+            ordini_in_carico *curr_in_carico = *head_in_carico, *prev_in_carico = NULL;
+            while (curr_in_carico != NULL && (curr_in_carico->dim_tot > new_in_carico->dim_tot || (curr_in_carico->dim_tot == new_in_carico->dim_tot && curr_in_carico->time_placed <= current->time_placed))) {
+                prev_in_carico = curr_in_carico;
+                curr_in_carico = curr_in_carico->next;
+            }
+            new_in_carico->next = curr_in_carico;
+            if (prev_in_carico != NULL) {
+                prev_in_carico->next = new_in_carico;
+            }
+        }
+
+        // stampa dettagli ordini
+        printf("%d, %s, %d\n", current->time_placed, current->name, current->qta);
+        current_cargo += current->dim_tot;
+
+        // pulisce la lista di carico
+        to_remove = current;
+        if (prev_completi == NULL) {
+            *head_completi = current->next;
+        } else {
+            prev_completi->next = current->next;
+        }
+        current = current->next;
+        free(to_remove);
     }
 }
