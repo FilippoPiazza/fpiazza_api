@@ -69,116 +69,6 @@ typedef struct ordini_in_carico
     struct ordini_in_carico *next;
 }ordini_in_carico;
 
-void aggiungi_ricetta(){}
-void rimuovi_ricetta(){}
-void aggiungi_ordine(){}
-void rifornisci(){}
-void scadenza(int t, struct magazzino *magazzino){}
-void prepara_ordini(){}
-void carica_furgone(){}
-void verifica_scadenze(int t, struct magazzino *magazzino){}
-
-
-int main(void) //should use getchar unlocked later, for performance
-{
-
-    char buffer[MAX_LINE_LENGTH];
-    // generazione liste
-    ricetta* head_ricetta = NULL;
-    ordini *head_ordine = NULL;
-    magazzino *head_magazzino = NULL;
-    ordini_completi *head_ordine_completi = NULL;
-    ordini_in_carico *head_ordine_in_carico = NULL;
-    // todo
-
-    //input iniziale di configurazione del furgone
-
-    if(fgets(buffer, sizeof(buffer), stdin) == NULL){return 69420;}
-    char *ptr = buffer;
-    int max_cargo = strtol(ptr, &ptr, 10);
-    int tempocorriere = strtol(ptr, &ptr, 10);
-    //printf("%d%d\n", max_cargo, tempocorriere);
-    memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
-
-    //la variabile cd_corriere funziona da countdown
-    int cd_corriere = tempocorriere;
-
-
-    //la variabile t conta il tempo
-    int t = 0;
-
-    while(1){
-        //controllo se arriva il corriere
-        if (cd_corriere == 0){    //todo qua va implementata la logica del corriere
-            carica_furgone(&head_ordine_completi, &head_ordine_in_carico, max_cargo);
-        }
-
-        /* comandi:
-            aggiungi_ricetta
-            ordine
-            rimuovi_ricetta
-            rifornimento
-        */
-
-        if(fgets(buffer, sizeof(buffer), stdin) == NULL){break;}
-
-        // se aggiungi_ricetta
-        if(buffer[2] == 'g'){
-            char *token = strtok(buffer + 17, " \t\n"); //verifica offset
-            // *token è il nome della ricetta
-            //if (token == NULL) return; \\ nome ricetta assente
-
-            char* tokens[MAX_LINE_LENGTH]; // contiene il resto del comando
-            int idx = 0;
-
-            char *nome_ricetta = token;
-            while (token != NULL && idx < (MAX_LINE_LENGTH / 2)) {
-                tokens[idx] = token;
-                idx += 1;
-                token = strtok(NULL, " \t\n");
-            }
-
-            tokens[idx] = NULL; // aggiungo terminatore nullo alla lista dei token
-
-            aggiungi_ricetta(&head_ricetta, nome_ricetta, tokens);
-            }
-
-        // se rimuovi_ricetta
-        else if(buffer[2] == 'm'){
-            char *token = strtok(buffer + 16, " "); //verifica offset
-            rimuovi_ricetta(&head_ricetta, token);
-        }
-
-        // se ordine
-        else if(buffer[2] == 'd'){
-            char *nome_ricetta = strtok(buffer + 7, " "); //verifica offset
-            char *qta_str = strtok(NULL, " \t\n");
-            if (nome_ricetta == NULL || qta_str == NULL) {
-                printf("Input non valido\n");
-                continue;
-            }
-            int quantita = atoi(qta_str);
-            aggiungi_ordine(&head_ordine, head_ricetta, nome_ricetta, quantita, t);
-        }
-
-        // se rifornimento
-        else if(buffer[2] == 'f'){
-            rifornisci(buffer, &head_magazzino);
-        }
-
-        //verifico per ogni ingrediente le cose scadute
-        verifica_scadenze(t, head_magazzino);
-
-        prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi);
-
-        t += 1;
-        memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
-
-
-    }
-
-}
-
 void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ingredienti) {
     ricetta *current = *head;
 
@@ -597,4 +487,104 @@ void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_
         current = current->next;
         free(to_remove);
     }
+}
+
+int main(void) //should use getchar unlocked later, for performance
+{
+
+    char buffer[MAX_LINE_LENGTH];
+    // generazione liste
+    ricetta* head_ricetta = NULL;
+    ordini *head_ordine = NULL;
+    magazzino *head_magazzino = NULL;
+    ordini_completi *head_ordine_completi = NULL;
+    ordini_in_carico *head_ordine_in_carico = NULL;
+    // todo
+
+    //input iniziale di configurazione del furgone
+
+    if(fgets(buffer, sizeof(buffer), stdin) == NULL){return 69420;}
+    char *ptr = buffer;
+    int max_cargo = strtol(ptr, &ptr, 10);
+    int tempocorriere = strtol(ptr, &ptr, 10);
+    //printf("%d%d\n", max_cargo, tempocorriere);
+    memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
+
+    //la variabile cd_corriere funziona da countdown
+    int cd_corriere = tempocorriere;
+
+
+    //la variabile t conta il tempo
+    int t = 0;
+
+    while(1){
+        //controllo se arriva il corriere
+        if (cd_corriere == 0){    //todo qua va implementata la logica del corriere
+            carica_furgone(&head_ordine_completi, &head_ordine_in_carico, max_cargo);
+        }
+
+        /* comandi:
+            aggiungi_ricetta
+            ordine
+            rimuovi_ricetta
+            rifornimento
+        */
+
+        if(fgets(buffer, sizeof(buffer), stdin) == NULL){break;}
+
+        // se aggiungi_ricetta
+        if(buffer[2] == 'g'){
+            char *token = strtok(buffer + 17, " \t\n"); //verifica offset
+            // *token è il nome della ricetta
+            //if (token == NULL) return; \\ nome ricetta assente
+
+            char* tokens[MAX_LINE_LENGTH]; // contiene il resto del comando
+            int idx = 0;
+
+            char *nome_ricetta = token;
+            while (token != NULL && idx < (MAX_LINE_LENGTH / 2)) {
+                tokens[idx] = token;
+                idx += 1;
+                token = strtok(NULL, " \t\n");
+            }
+
+            tokens[idx] = NULL; // aggiungo terminatore nullo alla lista dei token
+
+            aggiungi_ricetta(&head_ricetta, nome_ricetta, tokens);
+            }
+
+        // se rimuovi_ricetta
+        else if(buffer[2] == 'm'){
+            char *token = strtok(buffer + 16, " "); //verifica offset
+            rimuovi_ricetta(&head_ricetta, token);
+        }
+
+        // se ordine
+        else if(buffer[2] == 'd'){
+            char *nome_ricetta = strtok(buffer + 7, " "); //verifica offset
+            char *qta_str = strtok(NULL, " \t\n");
+            if (nome_ricetta == NULL || qta_str == NULL) {
+                printf("Input non valido\n");
+                continue;
+            }
+            int quantita = atoi(qta_str);
+            aggiungi_ordine(&head_ordine, head_ricetta, nome_ricetta, quantita, t);
+        }
+
+        // se rifornimento
+        else if(buffer[2] == 'f'){
+            rifornisci(buffer, &head_magazzino);
+        }
+
+        //verifico per ogni ingrediente le cose scadute
+        verifica_scadenze(t, head_magazzino);
+
+        prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi);
+
+        t += 1;
+        memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
+
+
+    }
+
 }
