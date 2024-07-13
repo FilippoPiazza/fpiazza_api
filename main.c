@@ -1,7 +1,7 @@
 // Filippo Piazza
 // 2024
 #define MAX_WORD_LENGTH 255
-#define MAX_LINE_LENGTH 8192
+#define MAX_LINE_LENGTH 65536
 
 #include<stdio.h>
 #include<string.h>
@@ -103,7 +103,7 @@ void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ing
     nuova_ricetta->prev = nuova_ricetta->next = NULL;
     nuova_ricetta->total_qta = 0;  // Inizializza la quantità totale a zero
 
-    // Processa i token degli ingredienti
+    // Processa i token degli ingredienti todo potrebbe aver senso linkare direttamente il nodo degli ingredienti nel magazzino
     ingrediente_ricetta *ultimo_ingrediente = NULL;
     for (int i = 1; token_ingredienti[i] != NULL; i += 2) {
         ingrediente_ricetta *nuovo_ingrediente = malloc(sizeof(ingrediente_ricetta));
@@ -196,25 +196,25 @@ void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *no
 
 void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi, const int current_time) {// Check if head_magazzino is NULL
     if (!head_magazzino) {
-        printf("head_magazzino is NULL.\n");
+        //printf("head_magazzino is NULL.\n");
         return; // Early exit if head_magazzino is NULL
     }
 
     // Check if the object head_magazzino points to is NULL
     if (!*head_magazzino) {
-        fprintf(stderr,"*head_magazzino is NULL.\n");
+        //fprintf(stderr,"*head_magazzino is NULL.\n");
         return; // Early exit if the object pointed to by head_magazzino is NULL
     }
 
     // Check if head_ordine is NULL
     if (!head_ordine) {
-        fprintf(stderr,"head_ordine is NULL.\n");
+        //fprintf(stderr,"head_ordine is NULL.\n");
         return; // Early exit if head_ordine is NULL
     }
 
     // Check if the object head_ordine points to is NULL
     if (!*head_ordine) {
-        fprintf(stderr,"*head_ordine is NULL.\n");
+        //fprintf(stderr,"*head_ordine is NULL.\n");
         return; // Early exit if the object pointed to by head_ordine is NULL
     }
 
@@ -386,7 +386,8 @@ void rifornisci(char *buffer, magazzino **head_magazzino, ricetta *head_ricetta,
     int idx = 0;
 
     while (token != NULL) {
-        tokens[idx++] = token;
+        tokens[idx] = token;
+        idx += 1;
         token = strtok(NULL, " \t\n");
     }
     tokens[idx] = NULL;
@@ -619,10 +620,16 @@ void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_
     *head_completi = current;
 }
 
+int read_line_unlocked(char *buffer, int max_size);
+
 int main(void) //should use getchar unlocked later, for performance
 {
 
-    char buffer[MAX_LINE_LENGTH];
+    char* buffer = (char*)malloc(MAX_LINE_LENGTH * sizeof(char));
+    if (!buffer) {
+        perror("Failed to allocate buffer");
+        return EXIT_FAILURE;
+    }
     // generazione liste
     ricetta* head_ricetta = NULL;
     ordini *head_ordine = NULL;
@@ -634,7 +641,7 @@ int main(void) //should use getchar unlocked later, for performance
 
     //input iniziale di configurazione del furgone
 
-    if(fgets(buffer, sizeof(buffer), stdin) == NULL){return 69420;}
+    if(read_line_unlocked(buffer, MAX_LINE_LENGTH) == 0){return 69420;}
     char *ptr = buffer;
     int tempocorriere = strtol(ptr, &ptr, 10);
     int max_cargo = strtol(ptr, &ptr, 10);
@@ -649,11 +656,14 @@ int main(void) //should use getchar unlocked later, for performance
     int t = 0;
 
     while(1){
+        fprintf(stderr, "T %d\n", t);
 
         //controllo se arriva il corriere
         if (cd_corriere == 0){    //todo qua va implementata la logica del corriere
+            fprintf(stderr, "Corriere...\n");
             carica_furgone(&head_ordine_completi, &head_ordine_in_carico, max_cargo, t);
             cd_corriere = tempocorriere-1;
+            fprintf(stderr, "OK\n");
         }
         else {cd_corriere -= 1;}
         /* comandi:
@@ -663,11 +673,14 @@ int main(void) //should use getchar unlocked later, for performance
             rifornimento
         */
 
-        if(fgets(buffer, sizeof(buffer), stdin) == NULL){break;}
+        if(read_line_unlocked(buffer, MAX_LINE_LENGTH) == 0){break;}
+
+
         trim_newline(buffer);
 
         // se aggiungi_ricetta
         if(buffer[2] == 'g'){
+            fprintf(stderr, "Aggiungo ricetta...");
             char *token = strtok(buffer + 17, " \t\n"); //verifica offset
             // *token è il nome della ricetta
             //if (token == NULL) return; \\ nome ricetta assente
@@ -685,16 +698,20 @@ int main(void) //should use getchar unlocked later, for performance
             tokens[idx] = NULL; // aggiungo terminatore nullo alla lista dei token
 
             aggiungi_ricetta(&head_ricetta, nome_ricetta, tokens);
+            fprintf(stderr, "OK\n");
             }
 
         // se rimuovi_ricetta
         else if(buffer[2] == 'm'){
+            fprintf(stderr, "Rimuovo ricetta...");
             char *token = strtok(buffer + 16, " "); //verifica offset
             rimuovi_ricetta(&head_ricetta, token);
+            fprintf(stderr, "OK\n");
         }
 
         // se ordine
         else if(buffer[2] == 'd'){
+            fprintf(stderr, "Aggiungo ordine...");
             char *nome_ricetta = strtok(buffer + 7, " "); //verifica offset
             char *qta_str = strtok(NULL, " \t\n");
             if (nome_ricetta == NULL || qta_str == NULL) {
@@ -703,20 +720,27 @@ int main(void) //should use getchar unlocked later, for performance
             }
             int quantita = atoi(qta_str);
             aggiungi_ordine(&head_ordine, head_ricetta, nome_ricetta, quantita, t);
+            fprintf(stderr, "OK\n");
         }
 
         // se rifornimento
         else if(buffer[2] == 'f'){
+            fprintf(stderr, "Rifornimento...");
             rifornisci(buffer, &head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, t);
             rifornimento_flag = 1;
+            fprintf(stderr, "OK\n");
 
         }
 
         //verifico per ogni ingrediente le cose scadute
+
         verifica_scadenze(t, &head_magazzino);
+        fprintf(stderr, "Verifica scadenze ok\n");
 
         if(rifornimento_flag == 0) {
+            fprintf(stderr, "Preparo ordini...");
             prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, t);
+            fprintf(stderr, "OK\n");
         }
         print_ordini_completi(head_ordine_completi, t);
         t += 1;
@@ -754,4 +778,18 @@ void trim_newline(char *str) {
     if (len > 0 && str[len - 1] == '\n') {
         str[len - 1] = '\0'; // Replace newline with null terminator
     }
+}
+
+int read_line_unlocked(char *buffer, int max_size) {
+    int act_max_size = max_size*sizeof(char);
+    int i = 0;
+    char ch;
+    while ((ch = getchar_unlocked()) != EOF && ch != '\n' && i < act_max_size) {
+        buffer[i] = ch;
+        i+=1;
+    }
+
+    buffer[i] = '\0'; // Null-terminate the string
+
+    return i; // Return the number of characters read, not including the null terminator
 }
