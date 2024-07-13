@@ -81,8 +81,11 @@ void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ing
         return;
     }
 
-    ricetta * nuova_ricetta = malloc(sizeof(ricetta)); //alloco memoria
-    // todo controlla se la memoria è stata effttivamente allocata if (nuova_ricetta == NULL) {
+    ricetta* nuova_ricetta = malloc(sizeof(struct ricetta)); //alloco memoria
+    if (nuova_ricetta == NULL) {
+        fprintf(stderr, "Failed to allocate memory for new recipe.\n");
+        return;
+    }
     strcpy(nuova_ricetta->name, nome_ricetta);
     nuova_ricetta->ingredienti = NULL;
     nuova_ricetta->prev = nuova_ricetta->next = NULL;
@@ -90,7 +93,7 @@ void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ing
 
     // Processa i token degli ingredienti
     ingrediente_ricetta *ultimo_ingrediente = NULL;
-    for (int i = 0; token_ingredienti[i] != NULL; i += 2) {
+    for (int i = 1; token_ingredienti[i] != NULL; i += 2) {
         ingrediente_ricetta *nuovo_ingrediente = malloc(sizeof(ingrediente_ricetta));
         if (nuovo_ingrediente == NULL) {
             fprintf(stderr, "Errore: Allocazione della memoria fallita per gli ingredienti\n");
@@ -165,7 +168,7 @@ void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *no
     // Posto dove incrementare il conto degli ordini nella ricetta
     ricetta_corrente->n_ord++;
 
-    printf("ordine aggiunto\n");
+    printf("accettato\n");
 }
 
 void rifornisci(char *buffer, magazzino **head) {
@@ -438,7 +441,10 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
 void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_carico, int max_cargo) {
     ordini_completi *current = *head_completi, *prev_completi = NULL, *to_remove;
     int current_cargo = 0;
-
+    if (current == NULL) {
+        printf("camioncino vuoto");
+        return;
+    }
     while (current != NULL) {
         if ((current_cargo + current->dim_tot) > max_cargo) {
             break; // Stop if adding this order exceeds max cargo capacity
@@ -499,14 +505,13 @@ int main(void) //should use getchar unlocked later, for performance
     magazzino *head_magazzino = NULL;
     ordini_completi *head_ordine_completi = NULL;
     ordini_in_carico *head_ordine_in_carico = NULL;
-    // todo
 
     //input iniziale di configurazione del furgone
 
     if(fgets(buffer, sizeof(buffer), stdin) == NULL){return 69420;}
     char *ptr = buffer;
-    int max_cargo = strtol(ptr, &ptr, 10);
     int tempocorriere = strtol(ptr, &ptr, 10);
+    int max_cargo = strtol(ptr, &ptr, 10);
     //printf("%d%d\n", max_cargo, tempocorriere);
     memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
 
@@ -518,11 +523,13 @@ int main(void) //should use getchar unlocked later, for performance
     int t = 0;
 
     while(1){
+        //printf("%d %d", t, cd_corriere);
         //controllo se arriva il corriere
         if (cd_corriere == 0){    //todo qua va implementata la logica del corriere
             carica_furgone(&head_ordine_completi, &head_ordine_in_carico, max_cargo);
+            cd_corriere = tempocorriere;
         }
-
+        else {cd_corriere -= 1;}
         /* comandi:
             aggiungi_ricetta
             ordine
@@ -582,6 +589,7 @@ int main(void) //should use getchar unlocked later, for performance
         prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi);
 
         t += 1;
+
         memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
 
 
