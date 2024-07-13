@@ -8,20 +8,21 @@
 #include<string.h>
 #include<stdlib.h>
 
-struct ingrediente_ricetta;
 
-struct magazzino
+typedef struct magazzino
 {
     struct magazzino *prev;
-    /* data */
+    char ingr_name[MAX_WORD_LENGTH];
+    struct ingrediente *ingredienti;
     struct magazzino *next;
-};
+}magazzino;
 
-struct ingrediente
+typedef struct ingrediente
 {
-    /* data */
+    int qta;
+    int expiry;
     struct ingrediente *next;
-};
+}ingrediente ;
 
 typedef struct  ingrediente_ricetta
 {
@@ -60,7 +61,7 @@ struct ordini_completi
 void aggiungi_ricetta(){}
 void rimuovi_ricetta(){}
 void aggiungi_ordine(){}
-void rifornisci(char ingr[MAX_WORD_LENGTH], int qta, struct magazzino *magazzino){}
+void rifornisci(){}
 void scadenza(int t, struct magazzino *magazzino){}
 void prepara_ordini(){}
 void carica_furgone(){}
@@ -74,6 +75,7 @@ int main(void) //should use getchar unlocked later, for performance
     // generazione liste
     ricetta* head_ricetta = NULL;
     ordini *head_ordine = NULL;
+    magazzino *head_magazzino = NULL;
     // todo
 
     //input iniziale di configurazione del furgone
@@ -149,8 +151,7 @@ int main(void) //should use getchar unlocked later, for performance
 
         // se rifornimento
         else if(buffer[2] == 'f'){
-            char *token = strtok(buffer + 13, " "); //verifica offset
-            printf("%s", token);
+            rifornisci(buffer, &head_magazzino);
         }
 
         //verifico per ogni ingrediente le cose scadute
@@ -237,7 +238,7 @@ void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *no
 
     // Verifica se la ricetta è stata trovata e corrisponde esattamente
     if (ricetta_corrente == NULL || strcmp(ricetta_corrente->name, nome_ricetta) != 0) {
-        printf("ricetta assente\n");
+        printf("rifiutato");
         return;
     }
 
@@ -258,4 +259,88 @@ void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *no
     ricetta_corrente->n_ord++;
 
     printf("ordine aggiunto\n");
+}
+
+void rifornisci(char *buffer, magazzino **head) {
+    char *token = strtok(buffer + 13, " \t\n");
+    char *tokens[MAX_LINE_LENGTH];
+    int idx = 0;
+
+    while (token != NULL) {
+        tokens[idx++] = token;
+        token = strtok(NULL, " \t\n");
+    }
+    tokens[idx] = NULL;
+
+    for (int i = 0; tokens[i] != NULL; i += 3) {
+        char *ingr_name = tokens[i];
+        int qta = atoi(tokens[i + 1]);
+        int expiry = atoi(tokens[i + 2]);
+
+        magazzino *current = *head, *prev = NULL;
+        while (current != NULL && strcmp(current->ingr_name, ingr_name) < 0) {
+            prev = current;
+            current = current->next;
+        }
+
+        if (current != NULL && strcmp(current->ingr_name, ingr_name) == 0) {
+            // Inserisce gli ingredienti in ordine di scadenza
+            ingrediente *ingr_ptr = current->ingredienti, *ingr_prev = NULL;
+            while (ingr_ptr != NULL && ingr_ptr->expiry > expiry) {
+                ingr_prev = ingr_ptr;
+                ingr_ptr = ingr_ptr->next;
+            }
+            if (ingr_ptr != NULL && ingr_ptr->expiry == expiry) {
+                // Se c'è già un lotto con la stessa scadenza, aggiunge la nuova quantità
+                ingr_ptr->qta += qta;
+            } else {
+                // altrimenti aggiunge un nuovo lotto
+                ingrediente *new_ingrediente = malloc(sizeof(ingrediente));
+                if (new_ingrediente == NULL) {
+                    fprintf(stderr, "Errore: Allocazione della memoria fallita per l'ingrediente\n");
+                    return;
+                }
+                new_ingrediente->qta = qta;
+                new_ingrediente->expiry = expiry;
+
+                if (ingr_prev == NULL) {
+                    new_ingrediente->next = current->ingredienti;
+                    current->ingredienti = new_ingrediente;
+                } else {
+                    new_ingrediente->next = ingr_prev->next;
+                    ingr_prev->next = new_ingrediente;
+                }
+            }
+        } else {
+            // Se non c'é già un ingrediente con lo stesso nome, lo crea
+            magazzino *new_node = malloc(sizeof(magazzino));
+            if (new_node == NULL) {
+                fprintf(stderr, "Errore: Allocazione della memoria fallita per il magazzino\n");
+                return;
+            }
+            strcpy(new_node->ingr_name, ingr_name);
+            new_node->prev = new_node->next = NULL;
+            new_node->ingredienti = malloc(sizeof(ingrediente));
+            if (new_node->ingredienti == NULL) {
+                fprintf(stderr, "Errore: Allocazione della memoria fallita per l'ingrediente\n");
+                free(new_node);
+                return;
+            }
+            new_node->ingredienti->qta = qta;
+            new_node->ingredienti->expiry = expiry;
+            new_node->ingredienti->next = NULL;
+
+            if (prev == NULL) {
+                new_node->next = *head;
+                if (*head != NULL) (*head)->prev = new_node;
+                *head = new_node;
+            } else {
+                new_node->next = prev->next;
+                new_node->prev = prev;
+                if (prev->next != NULL) prev->next->prev = new_node;
+                prev->next = new_node;
+            }
+        }
+    }
+    printf("rifornito\n");
 }
