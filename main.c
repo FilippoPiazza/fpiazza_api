@@ -2,6 +2,7 @@
 // 2024
 #define MAX_WORD_LENGTH 255
 #define MAX_LINE_LENGTH 65536
+#define _VERBOSE  0
 
 #include<stdio.h>
 #include<string.h>
@@ -646,7 +647,7 @@ int main(void) //should use getchar unlocked later, for performance
     int tempocorriere = strtol(ptr, &ptr, 10);
     int max_cargo = strtol(ptr, &ptr, 10);
     //printf("%d%d\n", max_cargo, tempocorriere);
-    memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
+    memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
 
     //la variabile cd_corriere funziona da countdown
     int cd_corriere = tempocorriere;
@@ -656,14 +657,15 @@ int main(void) //should use getchar unlocked later, for performance
     int t = 0;
 
     while(1){
-        fprintf(stderr, "T %d\n", t);
+        if(_VERBOSE){fprintf(stderr, "T %d\n", t);}
 
         //controllo se arriva il corriere
-        if (cd_corriere == 0){    //todo qua va implementata la logica del corriere
-            fprintf(stderr, "Corriere...\n");
+        if (cd_corriere == 0) {
+            //todo qua va implementata la logica del corriere
+            if(_VERBOSE){(stderr, "Corriere...\n");}
             carica_furgone(&head_ordine_completi, &head_ordine_in_carico, max_cargo, t);
             cd_corriere = tempocorriere-1;
-            fprintf(stderr, "OK\n");
+            if(_VERBOSE){fprintf(stderr, "OK\n");}
         }
         else {cd_corriere -= 1;}
         /* comandi:
@@ -680,7 +682,7 @@ int main(void) //should use getchar unlocked later, for performance
 
         // se aggiungi_ricetta
         if(buffer[2] == 'g'){
-            fprintf(stderr, "Aggiungo ricetta...");
+            if(_VERBOSE){fprintf(stderr, "Aggiungo ricetta...");}
             char *token = strtok(buffer + 17, " \t\n"); //verifica offset
             // *token è il nome della ricetta
             //if (token == NULL) return; \\ nome ricetta assente
@@ -698,20 +700,20 @@ int main(void) //should use getchar unlocked later, for performance
             tokens[idx] = NULL; // aggiungo terminatore nullo alla lista dei token
 
             aggiungi_ricetta(&head_ricetta, nome_ricetta, tokens);
-            fprintf(stderr, "OK\n");
+            if(_VERBOSE){fprintf(stderr, "OK\n");}
             }
 
         // se rimuovi_ricetta
         else if(buffer[2] == 'm'){
-            fprintf(stderr, "Rimuovo ricetta...");
+            if(_VERBOSE){fprintf(stderr, "Rimuovo ricetta...");}
             char *token = strtok(buffer + 16, " "); //verifica offset
             rimuovi_ricetta(&head_ricetta, token);
-            fprintf(stderr, "OK\n");
+            if(_VERBOSE){fprintf(stderr, "OK\n");}
         }
 
         // se ordine
         else if(buffer[2] == 'd'){
-            fprintf(stderr, "Aggiungo ordine...");
+            if(_VERBOSE){fprintf(stderr, "Aggiungo ordine...");}
             char *nome_ricetta = strtok(buffer + 7, " "); //verifica offset
             char *qta_str = strtok(NULL, " \t\n");
             if (nome_ricetta == NULL || qta_str == NULL) {
@@ -720,32 +722,32 @@ int main(void) //should use getchar unlocked later, for performance
             }
             int quantita = atoi(qta_str);
             aggiungi_ordine(&head_ordine, head_ricetta, nome_ricetta, quantita, t);
-            fprintf(stderr, "OK\n");
+            if(_VERBOSE){fprintf(stderr, "OK\n");}
         }
 
         // se rifornimento
         else if(buffer[2] == 'f'){
-            fprintf(stderr, "Rifornimento...");
+            if(_VERBOSE){fprintf(stderr, "Rifornimento...");}
             rifornisci(buffer, &head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, t);
             rifornimento_flag = 1;
-            fprintf(stderr, "OK\n");
+            if(_VERBOSE){fprintf(stderr, "OK\n");}
 
         }
 
         //verifico per ogni ingrediente le cose scadute
 
         verifica_scadenze(t, &head_magazzino);
-        fprintf(stderr, "Verifica scadenze ok\n");
+        if(_VERBOSE){fprintf(stderr, "Verifica scadenze ok\n");}
 
         if(rifornimento_flag == 0) {
-            fprintf(stderr, "Preparo ordini...");
+            if(_VERBOSE){fprintf(stderr, "Preparo ordini...");}
             prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, t);
-            fprintf(stderr, "OK\n");
+            if(_VERBOSE){fprintf(stderr, "OK\n");}
         }
         print_ordini_completi(head_ordine_completi, t);
         t += 1;
         rifornimento_flag = 0;
-        memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
+        memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
 
 
     }
@@ -784,7 +786,10 @@ int read_line_unlocked(char *buffer, int max_size) {
     int act_max_size = max_size*sizeof(char);
     int i = 0;
     char ch;
-    while ((ch = getchar_unlocked()) != EOF && ch != '\n' && i < act_max_size) {
+    while (1) {
+        if((ch = getchar_unlocked()) == EOF){break;}
+        if((ch == '\n')){break;}
+        if((i >= act_max_size)){break;}
         buffer[i] = ch;
         i+=1;
     }
