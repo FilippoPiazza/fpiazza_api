@@ -76,8 +76,7 @@ void rifornisci(char *buffer, magazzino **head_magazzino, ricetta *head_ricetta,
 void verifica_scadenze(const int t, magazzino **head);
 void rimuovi_ricetta(ricetta** head, const char* nome_ricetta);
 void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_carico, const int max_cargo, int tempo);
-void print_ordini_completi(ordini_completi *head, int tempo);
-void print_ordini_in_carico(ordini_in_carico *head, int tempo);
+
 void trim_newline(char *str);
 
 
@@ -85,11 +84,11 @@ void trim_newline(char *str);
 void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ingredienti) {
     ricetta *current = *head;
 
-    while (current != NULL && strcmp((current)->name, nome_ricetta) < 0 ) { // verifico l'ordine
+    while ((current != NULL) && (strcmp((current)->name, nome_ricetta) < 0) ) { // verifico l'ordine
     current = (current)->next;
     }
 
-    if (current != NULL && strcmp((current)->name, nome_ricetta) == 0 ) { // controllo se esiste già una ricetta con lo stesso nome
+    if ((current != NULL) && (strcmp((current)->name, nome_ricetta) == 0) ) { // controllo se esiste già una ricetta con lo stesso nome
         printf("ignorato\n");
         return;
     }
@@ -500,7 +499,7 @@ void rimuovi_ricetta(ricetta** head, const char* nome_ricetta) {
     ricetta *current = *head;
 
     // Cerca la ricetta
-    while (current != NULL && strcmp(current->name, nome_ricetta) != 0) { //todo forse basta >
+    while ((current != NULL) && strcmp(current->name, nome_ricetta) > 0) { //todo forse serve =!
         //fprintf(stderr, "ricetta da eliminare: %s ricetta attuale: %s\n", nome_ricetta, current->name);
         current = current->next;
 
@@ -608,7 +607,7 @@ void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_
     }
 
     // Print and free ordini_in_carico list
-    print_ordini_in_carico(*head_in_carico, tempo);
+
     ordini_in_carico *print_current = *head_in_carico;
     while (print_current != NULL) {
         printf("%d %s %d\n", print_current->time_placed, print_current->name, print_current->qta);
@@ -623,7 +622,7 @@ void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_
 
 int read_line_unlocked(char *buffer, int max_size);
 
-int main(void) //should use getchar unlocked later, for performance
+int main(void)
 {
 
     char* buffer = (char*)malloc(MAX_LINE_LENGTH * sizeof(char));
@@ -662,7 +661,7 @@ int main(void) //should use getchar unlocked later, for performance
         //controllo se arriva il corriere
         if (cd_corriere == 0) {
             //todo qua va implementata la logica del corriere
-            if(_VERBOSE){(stderr, "Corriere...\n");}
+            if(_VERBOSE){fprintf(stderr, "Corriere...\n");}
             carica_furgone(&head_ordine_completi, &head_ordine_in_carico, max_cargo, t);
             cd_corriere = tempocorriere-1;
             if(_VERBOSE){fprintf(stderr, "OK\n");}
@@ -744,7 +743,7 @@ int main(void) //should use getchar unlocked later, for performance
             prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, t);
             if(_VERBOSE){fprintf(stderr, "OK\n");}
         }
-        print_ordini_completi(head_ordine_completi, t);
+
         t += 1;
         rifornimento_flag = 0;
         memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
@@ -754,26 +753,6 @@ int main(void) //should use getchar unlocked later, for performance
 
 }
 
-void print_ordini_completi(ordini_completi *head, int tempo) {
-    return;
-    fprintf(stderr, "Orders in 'ordini_completi al tempo %d':\n", tempo);
-    while (head != NULL) {
-        fprintf(stderr, "Time Placed: %d, Name: %s, Quantity: %d, Total Dimension: %d\n",
-               head->time_placed, head->name, head->qta, head->dim_tot);
-        head = head->next;
-    }
-    fprintf(stderr,"\n");
-}
-void print_ordini_in_carico(ordini_in_carico *head, int tempo) {
-    return;
-    fprintf(stderr, "Orders in 'ordini_in_carico al tempo %d':\n", tempo);
-    while (head != NULL) {
-        fprintf(stderr,"Time Placed: %d, Name: %s, Quantity: %d, Total Dimension: %d\n",
-               head->time_placed, head->name, head->qta, head->dim_tot);
-        head = head->next;
-    }
-    fprintf(stderr,"\n");
-}
 
 void trim_newline(char *str) {
     int len = strlen(str);
