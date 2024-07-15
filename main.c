@@ -2,7 +2,7 @@
 // 2024
 #define MAX_WORD_LENGTH 255
 #define MAX_LINE_LENGTH 65536
-#define _VERBOSE  0
+#define _VERBOSE  1
 
 #include<stdio.h>
 #include<string.h>
@@ -289,7 +289,7 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
                     ingrediente *ingrediente_ptr = magazzino_ptr->ingredienti;
                     ingrediente *ingrediente_prev = NULL;
 
-                    while (ingrediente_ptr != NULL && needed_quantity > 0) {
+                    while ((ingrediente_ptr != NULL) && needed_quantity > 0) {
                         //fprintf(stderr, "sane serbia %p %d       ", (void *)ingrediente_ptr, needed_quantity);
                         if (ingrediente_ptr->qta <= needed_quantity) {
                             needed_quantity -= ingrediente_ptr->qta;  // Decrease needed by available
@@ -308,14 +308,8 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
                         } else {
                             ingrediente_ptr->qta -= needed_quantity;  // Reduce quantity of current ingredient
                             needed_quantity = 0;  // Set needed to zero as we've found enough
-                        }
-
-                        if (needed_quantity > 0 && 0) {  // Only update prev if we continue looping
-                            fprintf(stderr, "sane ghana %p %p       ", (void *)ingrediente_ptr, (void*)ingrediente_prev);
-                            ingrediente_prev = ingrediente_ptr;
-                            fprintf(stderr, "sane congo %p %p       ", (void *)ingrediente_ptr, (void*)ingrediente_ptr->next);
-                            ingrediente_ptr = ingrediente_ptr->next;
-                            fprintf(stderr, "sane kosovo");
+                            //ingrediente_prev = ingrediente_ptr;
+                            //ingrediente_ptr = ingrediente_ptr->next;
                         }
 
                     }
