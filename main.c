@@ -1,6 +1,6 @@
 // Filippo Piazza
 // 2024
-#define MAX_WORD_LENGTH 255
+#define MAX_WORD_LENGTH 128
 #define MAX_LINE_LENGTH 16384
 #define _VERBOSE 0
 
@@ -13,6 +13,7 @@ typedef struct magazzino
 {
     struct magazzino *prev;
     char ingr_name[MAX_WORD_LENGTH];
+    int tot_av;
     struct ingrediente *ingredienti;
     struct magazzino *next;
 }magazzino;
@@ -52,8 +53,8 @@ typedef struct ordini
 
 typedef struct ordini_completi
 {
-    char name[MAX_WORD_LENGTH];
     int qta;
+    struct ricetta* ricetta_ord;
     int dim_tot; //dimensione totale ordine, utile per il carico del furgone
     int time_placed;
     struct ordini_completi *next;
@@ -358,13 +359,14 @@ void prepara_ordini(const int current_time) { //TODO professore: è rilevante il
             magazzino *magazzino_ptr = head_magazzino;
 
             int needed_quantity = ingrediente_ricetta_ptr->qta * current_ordine->qta;
-            int found_quantity = 0;
+            // int found_quantity = 0;
 
 
                 magazzino_ptr = ingrediente_ricetta_ptr->ingr;
 
 
             // Raggruppa lotti con lo stesso ingrediente
+            /*
             if (magazzino_ptr != NULL) {
                 ingrediente *ingrediente_ptr = magazzino_ptr->ingredienti;
 
@@ -373,8 +375,10 @@ void prepara_ordini(const int current_time) { //TODO professore: è rilevante il
                     ingrediente_ptr = ingrediente_ptr->next;
                 }
             }
-            // fprintf(stderr, "tempo %d qta ingrediente %s per ricetta %s %d\n",current_time, ingrediente_ricetta_ptr-> nome, current_ricetta->name, found_quantity);
-            if (found_quantity < needed_quantity) {
+            */
+
+
+            if (magazzino_ptr->tot_av < needed_quantity) {
                 can_fulfill = 0;  // Non ci sono abbastanza ingredienti
                 // fprintf(stderr, "non abbastanza ingredienti per ricetta %s: found %d needed %d\n", current_ricetta->name, found_quantity, needed_quantity);
                 break;
@@ -409,6 +413,7 @@ void prepara_ordini(const int current_time) { //TODO professore: è rilevante il
                             needed_quantity -= ingrediente_ptr->qta;  // Decrease needed by available
 
                             // Removing ingredient from list
+                            magazzino_ptr->tot_av -= ingrediente_ptr->qta;
                             ingrediente *to_remove = ingrediente_ptr;
                             ingrediente_ptr = ingrediente_ptr->next;  // Move to next ingredient before removing
 
@@ -417,6 +422,7 @@ void prepara_ordini(const int current_time) { //TODO professore: è rilevante il
 
                             free(to_remove);  // Free the removed ingredient
                         } else {
+                            magazzino_ptr->tot_av -= needed_quantity;
                             ingrediente_ptr->qta -= needed_quantity;  // Reduce quantity of current ingredient
                             needed_quantity = 0;  // Set needed to zero as we've found enough
                             //ingrediente_prev = ingrediente_ptr;
@@ -445,7 +451,7 @@ void prepara_ordini(const int current_time) { //TODO professore: è rilevante il
                 return;
             }
 
-            strcpy(new_ordine_completo->name, current_ordine->ricetta_ord->name);
+            new_ordine_completo->ricetta_ord=current_ordine->ricetta_ord;
             new_ordine_completo->qta = current_ordine->qta;
             new_ordine_completo->dim_tot = current_ricetta->total_qta * current_ordine->qta;
             new_ordine_completo->time_placed = current_ordine->time_placed;
@@ -515,6 +521,7 @@ void rifornisci(char *buffer, const int t) {
         // Se c'è già un lotto con la stessa scadenza, ne aumenta la quantità
         if (ingr_ptr != NULL && ingr_ptr->expiry == expiry) {
 
+            current->tot_av +=qta;
             ingr_ptr->qta += qta;
         }
         // Altrimenti, crea un nuovo batch
@@ -525,6 +532,7 @@ void rifornisci(char *buffer, const int t) {
                 return;
             }
 
+            current->tot_av +=qta;
             new_ingrediente->qta = qta;
             new_ingrediente->expiry = expiry;
 
@@ -548,6 +556,7 @@ void verifica_scadenze(const int t) { //todo questa funzione andrebbe riscritta 
         ingrediente **cur = &(current->ingredienti);
         while (*cur) {
             if ((*cur)->expiry < t) { // todo minore o (minore o uguale) ??
+                current->tot_av -=(*cur)->qta;
                 ingrediente *expired = *cur;
                 *cur = (*cur)->next;
                 free(expired);
@@ -626,7 +635,7 @@ void carica_furgone(const int max_cargo, int tempo) {
             fprintf(stderr, "Memory allocation failed for new in-carico order\n");
             return; // Early exit on memory allocation failure
         }
-        strcpy(new_in_carico->name, current->name);
+        strcpy(new_in_carico->name, current->ricetta_ord->name);
         new_in_carico->qta = current->qta;
         new_in_carico->dim_tot = current->dim_tot;
         new_in_carico->time_placed = current->time_placed;
