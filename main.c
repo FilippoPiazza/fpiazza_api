@@ -44,7 +44,6 @@ typedef struct ricetta
 
 typedef struct ordini
 {
-    char name[MAX_WORD_LENGTH];
     int qta;
     struct ricetta* ricetta_ord;
     struct ordini *next;
@@ -316,7 +315,6 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
         return;
     }
 
-    strcpy(nuovo_ordine->name, nome_ricetta);
     nuovo_ordine->qta = quantita;
     nuovo_ordine->ricetta_ord = ricetta_corrente;
     nuovo_ordine->next = NULL;
@@ -338,15 +336,14 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
     printf("accettato\n");
 }
 
-void prepara_ordini(const int current_time) {// Check if head_magazzino is NULL
+void prepara_ordini(const int current_time) { //TODO professore: è rilevante il fatto che devo fare immediatamente la analisi?
     ordini *current_ordine = head_ordine;
     ordini *prev_ordine = NULL;
 
     while (current_ordine != NULL) {
         if (current_ordine->ricetta_ord == NULL) {
-            printf("ricetta_ord pointer is NULL for order %s.\n", current_ordine->name);
-            current_ordine = current_ordine->next;
-            continue; // Skip processing this order
+            printf("FATAL: ricetta_ord pointer is NULL for order placet at time %d.\n", current_ordine->time_placed);
+            return; // Skip processing this order
         }
         if ((current_time != -1) && (current_ordine->time_placed > current_time)) {
             break;  // If current_time is specified and order's time exceeds it, stop processing.
@@ -448,7 +445,7 @@ void prepara_ordini(const int current_time) {// Check if head_magazzino is NULL
                 return;
             }
 
-            strcpy(new_ordine_completo->name, current_ordine->name);
+            strcpy(new_ordine_completo->name, current_ordine->ricetta_ord->name);
             new_ordine_completo->qta = current_ordine->qta;
             new_ordine_completo->dim_tot = current_ricetta->total_qta * current_ordine->qta;
             new_ordine_completo->time_placed = current_ordine->time_placed;
@@ -692,6 +689,7 @@ void trim_newline(char *str) {
         str[len - 1] = '\0'; // Replace newline with null terminator
     }
 }
+
 int read_line_unlocked(char *buffer, int max_size) {
     int act_max_size = max_size*sizeof(char);
     int i = 0;
@@ -708,6 +706,7 @@ int read_line_unlocked(char *buffer, int max_size) {
 
     return i; // Return the number of characters read, not including the null terminator
 }
+
 ricetta* ricerca_pseudo_binaria(const char* nome_ricetta) {
     ricetta *current = head_ricetta;
     ricetta *previous = NULL;
