@@ -2,7 +2,7 @@
 // 2024
 #define MAX_WORD_LENGTH 255
 #define MAX_LINE_LENGTH 65536
-#define _VERBOSE  0
+#define _VERBOSE 1
 
 #include<stdio.h>
 #include<string.h>
@@ -26,7 +26,7 @@ typedef struct ingrediente
 
 typedef struct  ingrediente_ricetta
 {
-    char nome[MAX_WORD_LENGTH];
+    magazzino *ingr;
     int qta;
     struct ingrediente_ricetta *next;
 } ingrediente_ricetta;
@@ -69,20 +69,153 @@ typedef struct ordini_in_carico
     struct ordini_in_carico *next;
 }ordini_in_carico;
 
-void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ingredienti, int *ricette_totali);
+void aggiungi_ricetta(ricetta** head, const char* nome_ricetta, char** token_ingredienti, int *ricette_totali, int*ingredienti_totali, magazzino* head_magazzino);
 void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *nome_ricetta, const int quantita, const int t, int *ricette_totali);
 void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi, const int current_time, int *ricette_totali);
-void rifornisci(char *buffer, magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi, const int t, int *ricette_totali);
+void rifornisci(char *buffer, magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi, const int t, int *ricette_totali, int*ingredienti_totali);
 void verifica_scadenze(const int t, magazzino **head);
 void rimuovi_ricetta(ricetta** head, const char* nome_ricetta, int *ricette_totali);
 void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_carico, const int max_cargo, int tempo);
 ricetta* ricerca_pseudo_binaria(ricetta* head, const char* nome_ricetta, int total);
-
+magazzino* ricerca_pseudo_binaria_ingr(magazzino* head, const char* nome_ingr, int total); //this and the above should be merged somehow
+int read_line_unlocked(char *buffer, int max_size);
 void trim_newline(char *str);
 
+int main(void)
+{
+
+    char* buffer = (char*)malloc(MAX_LINE_LENGTH * sizeof(char));
+    if (buffer == NULL) {
+        perror("Failed to allocate buffer");
+        return EXIT_FAILURE;
+    }
+    // generazione liste
+    ricetta* head_ricetta = NULL;
+    ordini *head_ordine = NULL;
+    magazzino *head_magazzino = NULL;
+    ordini_completi *head_ordine_completi = NULL;
+    ordini_in_carico *head_ordine_in_carico = NULL;
+
+    int rifornimento_flag = 0;
+
+    //input iniziale di configurazione del furgone
+
+    if(read_line_unlocked(buffer, MAX_LINE_LENGTH) == 0){return 69420;}
+    char *ptr = buffer;
+    int tempocorriere = strtol(ptr, &ptr, 10);
+    int max_cargo = strtol(ptr, &ptr, 10);
+    //printf("%d%d\n", max_cargo, tempocorriere);
+    memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
+
+    //la variabile cd_corriere funziona da countdown
+    int cd_corriere = tempocorriere;
 
 
-void aggiungi_ricetta(ricetta** head_ricetta, const char* nome_ricetta, char** token_ingredienti, int * ricette_totali) {
+    //la variabile t conta il tempo
+    int t = 0;
+    int ricette_totali = 0; // dovrebbe essere globale
+    int ingredienti_totali = 0;
+
+    while(1){
+        if(_VERBOSE){fprintf(stderr, "T %d\n", t);}
+
+        //controllo se arriva il corriere
+        if (cd_corriere == 0) {
+            //todo qua va implementata la logica del corriere
+            if(_VERBOSE){fprintf(stderr, "Corriere...\n");}
+            carica_furgone(&head_ordine_completi, &head_ordine_in_carico, max_cargo, t);
+            cd_corriere = tempocorriere-1;
+            if(_VERBOSE){fprintf(stderr, "OK\n");}
+        }
+        else {cd_corriere -= 1;}
+        /* comandi:
+            aggiungi_ricetta
+            ordine
+            rimuovi_ricetta
+            rifornimento
+        */
+
+        if(read_line_unlocked(buffer, MAX_LINE_LENGTH) == 0){break;}
+
+
+        trim_newline(buffer);
+
+        // se aggiungi_ricetta
+        if(buffer[2] == 'g'){
+            if(_VERBOSE){fprintf(stderr, "Aggiungo ricetta...");}
+            char *token = strtok(buffer + 17, " \t\n"); //verifica offset
+            // *token è il nome della ricetta
+            //if (token == NULL) return; \\ nome ricetta assente
+
+            char* tokens[MAX_LINE_LENGTH]; // contiene il resto del comando
+            int idx = 0;
+
+            char *nome_ricetta = token;
+            while (token != NULL && idx < (MAX_LINE_LENGTH / 2)) {
+                tokens[idx] = token;
+                idx += 1;
+                token = strtok(NULL, " \t\n");
+            }
+
+            tokens[idx] = NULL; // aggiungo terminatore nullo alla lista dei token
+
+            aggiungi_ricetta(&head_ricetta, nome_ricetta, tokens, &ricette_totali,&ingredienti_totali, head_magazzino);
+            if(_VERBOSE){fprintf(stderr, "OK\n");}
+            }
+
+        // se rimuovi_ricetta
+        else if(buffer[2] == 'm'){
+            if(_VERBOSE){fprintf(stderr, "Rimuovo ricetta...");}
+            char *token = strtok(buffer + 16, " "); //verifica offset
+            rimuovi_ricetta(&head_ricetta, token, &ricette_totali);
+            if(_VERBOSE){fprintf(stderr, "OK\n");}
+        }
+
+        // se ordine
+        else if(buffer[2] == 'd'){
+            if(_VERBOSE){fprintf(stderr, "Aggiungo ordine...");}
+            char *nome_ricetta = strtok(buffer + 7, " "); //verifica offset
+            char *qta_str = strtok(NULL, " \t\n");
+            if (nome_ricetta == NULL || qta_str == NULL) {
+                printf("Input non valido\n");
+                continue;
+            }
+            int quantita = atoi(qta_str);
+            aggiungi_ordine(&head_ordine, head_ricetta, nome_ricetta, quantita, t, &ricette_totali);
+            if(_VERBOSE){fprintf(stderr, "OK\n");}
+        }
+
+        // se rifornimento
+        else if(buffer[2] == 'f'){
+            if(_VERBOSE){fprintf(stderr, "Rifornimento...");}
+            rifornisci(buffer, &head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, t, &ricette_totali, &ingredienti_totali );
+            prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, t, &ricette_totali);
+            rifornimento_flag = 1;
+            if(_VERBOSE){fprintf(stderr, "OK\n");}
+
+        }
+
+        //verifico per ogni ingrediente le cose scadute
+
+        verifica_scadenze(t, &head_magazzino);
+        if(_VERBOSE){fprintf(stderr, "Verifica scadenze ok\n");}
+
+        if(rifornimento_flag == 0) {
+            if(_VERBOSE){fprintf(stderr, "Preparo ordini...");}
+            prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, -1, &ricette_totali); // verifica
+            if(_VERBOSE){fprintf(stderr, "OK\n");}
+        }
+
+        t += 1;
+        rifornimento_flag = 0;
+        memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
+
+
+    }
+
+}
+
+void aggiungi_ricetta(ricetta** head_ricetta, const char* nome_ricetta, char** token_ingredienti, int * ricette_totali, int*ingredienti_totali, magazzino* head_magazzino) {
     ricetta *insert_after = ricerca_pseudo_binaria(*head_ricetta, "new_ricetta_name", *ricette_totali);
     ricetta *current = *head_ricetta;
     ricetta *prev = NULL;
@@ -114,11 +247,30 @@ void aggiungi_ricetta(ricetta** head_ricetta, const char* nome_ricetta, char** t
             free(nuova_ricetta);
             return;
         }
-        strcpy(nuovo_ingrediente->nome, token_ingredienti[i]);
         nuovo_ingrediente->qta = atoi(token_ingredienti[i + 1]);
         nuovo_ingrediente->next = NULL;
         nuova_ricetta->total_qta += nuovo_ingrediente->qta;  // Aggiunge la quantità al totale
         nuova_ricetta->n_ord = 0;
+
+        magazzino * insert_after_ingr = ricerca_pseudo_binaria_ingr(head_magazzino, token_ingredienti[i], *ingredienti_totali);
+        if ((insert_after_ingr != NULL) && (strcmp(insert_after_ingr->ingr_name, token_ingredienti[i]) == 0)) {
+            nuovo_ingrediente->ingr = insert_after_ingr;
+        }
+        else if ((insert_after_ingr != NULL) && (strcmp(insert_after_ingr->ingr_name, token_ingredienti[i]) < 0)) {
+            magazzino *new_node = malloc(sizeof(magazzino));
+            if (new_node == NULL) {
+                fprintf(stderr, "Errore: Allocazione della memoria fallita per il magazzino(creazione ricetta)\n");
+                return;
+            }
+            strcpy(new_node->ingr_name, token_ingredienti[i]);
+            if(insert_after_ingr->next != NULL){insert_after_ingr->next->prev = new_node;}
+            new_node->next = insert_after_ingr->next;
+            new_node->prev = insert_after_ingr;
+            insert_after_ingr->next=new_node;
+            *ingredienti_totali +=1;
+
+        }
+
 
         if (ultimo_ingrediente == NULL) {
             nuova_ricetta->ingredienti = nuovo_ingrediente;
@@ -142,7 +294,7 @@ void aggiungi_ricetta(ricetta** head_ricetta, const char* nome_ricetta, char** t
         }
         insert_after->next = nuova_ricetta;
     }
-
+    *ricette_totali += 1;
     printf("aggiunta\n");
 }
 
@@ -156,16 +308,6 @@ void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *no
 
     // Verifica se la ricetta è stata trovata e corrisponde esattamente
     if ((ricetta_corrente == NULL) || (strcmp(ricetta_corrente->name, nome_ricetta) != 0)) {
-        fprintf(stderr, "rifiutato ricetta %s\n", nome_ricetta);
-
-        if (1 || strcmp(nome_ricetta, "k91ztT0fKnERew7EteSsXg4PIx2") == 0) { //serve per debug
-            ricetta *current = head_ricetta;  // Start at the head of the list
-            while (current != NULL) {  // Continue until the end of the list
-                fprintf(stderr,"Ricetta : %s\n", current->name);  // Print the name of the current ricetta
-                current = current->next;  // Move to the next element in the list
-            }}
-
-
         printf("rifiutato\n");
         return;
     }
@@ -202,39 +344,16 @@ void aggiungi_ordine(ordini **head_ordine, ricetta *head_ricetta, const char *no
 }
 
 void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi, const int current_time, int *ricette_totali) {// Check if head_magazzino is NULL
-    if (!head_magazzino) {
-        //printf("head_magazzino is NULL.\n");
-        return; // Early exit if head_magazzino is NULL
-    }
-
-    // Check if the object head_magazzino points to is NULL
-    if (!*head_magazzino) {
-        //fprintf(stderr,"*head_magazzino is NULL.\n");
-        return; // Early exit if the object pointed to by head_magazzino is NULL
-    }
-
-    // Check if head_ordine is NULL
-    if (!head_ordine) {
-        //fprintf(stderr,"head_ordine is NULL.\n");
-        return; // Early exit if head_ordine is NULL
-    }
-
-    // Check if the object head_ordine points to is NULL
-    if (!*head_ordine) {
-        //fprintf(stderr,"*head_ordine is NULL.\n");
-        return; // Early exit if the object pointed to by head_ordine is NULL
-    }
-
     ordini *current_ordine = *head_ordine;
     ordini *prev_ordine = NULL;
 
     while (current_ordine != NULL) {
-        if (!current_ordine->ricetta_ord) {
+        if (current_ordine->ricetta_ord == NULL) {
             printf("ricetta_ord pointer is NULL for order %s.\n", current_ordine->name);
             current_ordine = current_ordine->next;
             continue; // Skip processing this order
         }
-        if (current_time != -1 && current_ordine->time_placed > current_time) {
+        if ((current_time != -1) && (current_ordine->time_placed > current_time)) {
             break;  // If current_time is specified and order's time exceeds it, stop processing.
         }
         ricetta *current_ricetta = current_ordine->ricetta_ord;
@@ -249,10 +368,9 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
             int needed_quantity = ingrediente_ricetta_ptr->qta * current_ordine->qta;
             int found_quantity = 0;
 
-            // Cerca l'ingrediente nel magazzino
-            while (magazzino_ptr != NULL && strcmp(magazzino_ptr->ingr_name, ingrediente_ricetta_ptr->nome) != 0) {
-                magazzino_ptr = magazzino_ptr->next;
-            }
+
+                magazzino_ptr = ingrediente_ricetta_ptr->ingr;
+
 
             // Raggruppa lotti con lo stesso ingrediente
             if (magazzino_ptr != NULL) {
@@ -286,10 +404,7 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
 
 
                 // Cerca l'ingrediente nel magazzino
-                while (magazzino_ptr != NULL && strcmp(magazzino_ptr->ingr_name, ingrediente_ricetta_ptr->nome) != 0) {
-
-                    magazzino_ptr = magazzino_ptr->next;
-                }
+                magazzino_ptr = ingrediente_ricetta_ptr->ingr;
 
                 if (magazzino_ptr != NULL) {
 
@@ -305,11 +420,8 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
                             ingrediente *to_remove = ingrediente_ptr;
                             ingrediente_ptr = ingrediente_ptr->next;  // Move to next ingredient before removing
 
-                            if (ingrediente_prev == NULL) {
-                                magazzino_ptr->ingredienti = ingrediente_ptr;  // Update head if first ingredient
-                            } else {
-                                ingrediente_prev->next = ingrediente_ptr;  // Link previous to next
-                            }
+                            magazzino_ptr->ingredienti = ingrediente_ptr;  // Update head if first ingredient
+
 
                             free(to_remove);  // Free the removed ingredient
                         } else {
@@ -348,7 +460,7 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
             new_ordine_completo->next = NULL;
 
 
-            if (!*head_ordine_completi || (*head_ordine_completi)->time_placed >= new_ordine_completo->time_placed) {
+            if ((*head_ordine_completi == NULL) || (*head_ordine_completi)->time_placed >= new_ordine_completo->time_placed) {
                 new_ordine_completo->next = *head_ordine_completi;
                 *head_ordine_completi = new_ordine_completo;
             } else {
@@ -381,7 +493,7 @@ void prepara_ordini(magazzino **head_magazzino, ricetta *head_ricetta, ordini **
     }
 }
 
-void rifornisci(char *buffer, magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi,const int t, int *ricette_totali) {
+void rifornisci(char *buffer, magazzino **head_magazzino, ricetta *head_ricetta, ordini **head_ordine, ordini_completi **head_ordine_completi,const int t, int *ricette_totali, int*ingredienti_totali) {
     char *token = strtok(buffer + 13, " \t\n");
     char *tokens[MAX_LINE_LENGTH];
     int idx = 0;
@@ -461,10 +573,10 @@ void rifornisci(char *buffer, magazzino **head_magazzino, ricetta *head_ricetta,
                 if (prev->next != NULL) prev->next->prev = new_node;
                 prev->next = new_node;
             }
+            *ingredienti_totali +=1;
         }
     }
     printf("rifornito\n");
-    prepara_ordini(head_magazzino, head_ricetta, head_ordine, head_ordine_completi, t, ricette_totali);
 }
 
 void verifica_scadenze(const int t, magazzino **head) {
@@ -617,144 +729,8 @@ void carica_furgone(ordini_completi **head_completi, ordini_in_carico **head_in_
         free(to_free);
     }
     *head_in_carico = NULL; // Reset head_in_carico list
-    current_cargo = 0;
     *head_completi = current;
 }
-
-int read_line_unlocked(char *buffer, int max_size);
-
-int main(void)
-{
-
-    char* buffer = (char*)malloc(MAX_LINE_LENGTH * sizeof(char));
-    if (!buffer) {
-        perror("Failed to allocate buffer");
-        return EXIT_FAILURE;
-    }
-    // generazione liste
-    ricetta* head_ricetta = NULL;
-    ordini *head_ordine = NULL;
-    magazzino *head_magazzino = NULL;
-    ordini_completi *head_ordine_completi = NULL;
-    ordini_in_carico *head_ordine_in_carico = NULL;
-
-    int rifornimento_flag = 0;
-
-    //input iniziale di configurazione del furgone
-
-    if(read_line_unlocked(buffer, MAX_LINE_LENGTH) == 0){return 69420;}
-    char *ptr = buffer;
-    int tempocorriere = strtol(ptr, &ptr, 10);
-    int max_cargo = strtol(ptr, &ptr, 10);
-    //printf("%d%d\n", max_cargo, tempocorriere);
-    memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
-
-    //la variabile cd_corriere funziona da countdown
-    int cd_corriere = tempocorriere;
-
-
-    //la variabile t conta il tempo
-    int t = 0;
-    int ricette_totali = 0;
-
-    while(1){
-        if(_VERBOSE){fprintf(stderr, "T %d\n", t);}
-
-        //controllo se arriva il corriere
-        if (cd_corriere == 0) {
-            //todo qua va implementata la logica del corriere
-            if(_VERBOSE){fprintf(stderr, "Corriere...\n");}
-            carica_furgone(&head_ordine_completi, &head_ordine_in_carico, max_cargo, t);
-            cd_corriere = tempocorriere-1;
-            if(_VERBOSE){fprintf(stderr, "OK\n");}
-        }
-        else {cd_corriere -= 1;}
-        /* comandi:
-            aggiungi_ricetta
-            ordine
-            rimuovi_ricetta
-            rifornimento
-        */
-
-        if(read_line_unlocked(buffer, MAX_LINE_LENGTH) == 0){break;}
-
-
-        trim_newline(buffer);
-
-        // se aggiungi_ricetta
-        if(buffer[2] == 'g'){
-            if(_VERBOSE){fprintf(stderr, "Aggiungo ricetta...");}
-            char *token = strtok(buffer + 17, " \t\n"); //verifica offset
-            // *token è il nome della ricetta
-            //if (token == NULL) return; \\ nome ricetta assente
-
-            char* tokens[MAX_LINE_LENGTH]; // contiene il resto del comando
-            int idx = 0;
-
-            char *nome_ricetta = token;
-            while (token != NULL && idx < (MAX_LINE_LENGTH / 2)) {
-                tokens[idx] = token;
-                idx += 1;
-                token = strtok(NULL, " \t\n");
-            }
-
-            tokens[idx] = NULL; // aggiungo terminatore nullo alla lista dei token
-
-            aggiungi_ricetta(&head_ricetta, nome_ricetta, tokens, &ricette_totali);
-            if(_VERBOSE){fprintf(stderr, "OK\n");}
-            }
-
-        // se rimuovi_ricetta
-        else if(buffer[2] == 'm'){
-            if(_VERBOSE){fprintf(stderr, "Rimuovo ricetta...");}
-            char *token = strtok(buffer + 16, " "); //verifica offset
-            rimuovi_ricetta(&head_ricetta, token, &ricette_totali);
-            if(_VERBOSE){fprintf(stderr, "OK\n");}
-        }
-
-        // se ordine
-        else if(buffer[2] == 'd'){
-            if(_VERBOSE){fprintf(stderr, "Aggiungo ordine...");}
-            char *nome_ricetta = strtok(buffer + 7, " "); //verifica offset
-            char *qta_str = strtok(NULL, " \t\n");
-            if (nome_ricetta == NULL || qta_str == NULL) {
-                printf("Input non valido\n");
-                continue;
-            }
-            int quantita = atoi(qta_str);
-            aggiungi_ordine(&head_ordine, head_ricetta, nome_ricetta, quantita, t, &ricette_totali);
-            if(_VERBOSE){fprintf(stderr, "OK\n");}
-        }
-
-        // se rifornimento
-        else if(buffer[2] == 'f'){
-            if(_VERBOSE){fprintf(stderr, "Rifornimento...");}
-            rifornisci(buffer, &head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, t, &ricette_totali);
-            rifornimento_flag = 1;
-            if(_VERBOSE){fprintf(stderr, "OK\n");}
-
-        }
-
-        //verifico per ogni ingrediente le cose scadute
-
-        verifica_scadenze(t, &head_magazzino);
-        if(_VERBOSE){fprintf(stderr, "Verifica scadenze ok\n");}
-
-        if(rifornimento_flag == 0) {
-            if(_VERBOSE){fprintf(stderr, "Preparo ordini...");}
-            prepara_ordini(&head_magazzino, head_ricetta, &head_ordine, &head_ordine_completi, t, &ricette_totali);
-            if(_VERBOSE){fprintf(stderr, "OK\n");}
-        }
-
-        t += 1;
-        rifornimento_flag = 0;
-        memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
-
-
-    }
-
-}
-
 
 void trim_newline(char *str) {
     int len = strlen(str);
@@ -762,7 +738,6 @@ void trim_newline(char *str) {
         str[len - 1] = '\0'; // Replace newline with null terminator
     }
 }
-
 int read_line_unlocked(char *buffer, int max_size) {
     int act_max_size = max_size*sizeof(char);
     int i = 0;
@@ -779,7 +754,6 @@ int read_line_unlocked(char *buffer, int max_size) {
 
     return i; // Return the number of characters read, not including the null terminator
 }
-
 ricetta* ricerca_pseudo_binaria(ricetta* head, const char* nome_ricetta, int total) {
     ricetta *current = head;
     ricetta *previous = NULL;
@@ -819,6 +793,49 @@ ricetta* ricerca_pseudo_binaria(ricetta* head, const char* nome_ricetta, int tot
     }
 
     if (current == NULL || strcmp(current->name, nome_ricetta) > 0) {
+        return previous;  // Insert after previous
+    }
+    return current;  // Exact match found
+}
+magazzino* ricerca_pseudo_binaria_ingr(magazzino* head, const char* nome_ingr, int total) {
+    magazzino *current = head;
+    magazzino *previous = NULL;
+    int skip = total / 2;  // Initially set skip to half of the list size
+
+    while (current != NULL && skip > 0) {
+        magazzino *scanner = current;
+        int step = 0;
+
+        // Attempt to skip forward in the list
+        while (step < skip && scanner != NULL) {
+            previous = scanner;
+            scanner = scanner->next;
+            step++;
+        }
+
+        // Check position of scanner in relation to target
+        if (scanner == NULL || strcmp(scanner->ingr_name, nome_ingr) >= 0) {
+            if (skip == 1) {  // Final step: Determine exact insertion point
+                if (scanner == NULL || strcmp(scanner->ingr_name, nome_ingr) > 0) {
+                    // Either at the end or between previous and scanner
+                    return previous;  // Insert after previous
+                }
+                return scanner;  // Exact match or insert before scanner
+            }
+            skip /= 2;  // Halve the skip size
+        } else {
+            // Move the current forward since target is further
+            current = scanner;
+        }
+    }
+
+    // If skip becomes zero, do linear search for exact position
+    while (current != NULL && strcmp(current->ingr_name, nome_ingr) < 0) {
+        previous = current;
+        current = current->next;
+    }
+
+    if (current == NULL || strcmp(current->ingr_name, nome_ingr) > 0) {
         return previous;  // Insert after previous
     }
     return current;  // Exact match found
