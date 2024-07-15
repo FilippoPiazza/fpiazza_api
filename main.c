@@ -2,7 +2,7 @@
 // 2024
 #define MAX_WORD_LENGTH 255
 #define MAX_LINE_LENGTH 16384
-#define _VERBOSE 1
+#define _VERBOSE 0
 
 #include<stdio.h>
 #include<string.h>
@@ -88,6 +88,7 @@ int ricette_totali = 0;
 int ingredienti_totali = 0;
 ricetta* head_ricetta = NULL;
 ordini *head_ordine = NULL;
+ordini *tail_ordine = NULL;
 magazzino *head_magazzino = NULL;
 ordini_completi *head_ordine_completi = NULL;
 ordini_in_carico *head_ordine_in_carico = NULL;
@@ -196,14 +197,13 @@ int main(void)
         else if(buffer[2] == 'f'){
             if(_VERBOSE){fprintf(stderr, "Rifornimento...");}
             rifornisci(buffer, t);
-            prepara_ordini(t);
+            prepara_ordini(t); // TODO ha senso preparare solo questi?
             rifornimento_flag = 1;
             if(_VERBOSE){fprintf(stderr, "OK\n");}
 
         }
 
         //verifico per ogni ingrediente le cose scadute
-
         verifica_scadenze(t);
         if(_VERBOSE){fprintf(stderr, "Verifica scadenze ok\n");}
 
@@ -262,9 +262,12 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
 
         // Collego la ricetta al magazzino
         magazzino * ingrediente_magazzino = punt_ingrediente(token_ingredienti[i]);
+        /* TODO importante sta roba è buggata
         if ((ingrediente_magazzino != NULL) && (strcmp(ingrediente_magazzino->ingr_name, token_ingredienti[i]) == 0)) {
             nuovo_ingrediente->ingr = ingrediente_magazzino;
         }
+        */
+        nuovo_ingrediente->ingr = ingrediente_magazzino;
 
         // TODO urgente cosa fa questa parte? mi sono dimenticato.
         if (ultimo_ingrediente == NULL) {
@@ -296,12 +299,9 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
 }
 
 void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) {
-    // Ricerca della ricetta nella lista ordinata
-    ricetta *ricetta_corrente = head_ricetta;
-    while ((ricetta_corrente != NULL) && (strcmp(ricetta_corrente->name, nome_ricetta) < 0)) {
 
-        ricetta_corrente = ricetta_corrente->next;
-    }
+    // Ricerca della ricetta nella lista ordinata
+    ricetta *ricetta_corrente = ricerca_pseudo_binaria(nome_ricetta);
 
     // Verifica se la ricetta è stata trovata e corrisponde esattamente
     if ((ricetta_corrente == NULL) || (strcmp(ricetta_corrente->name, nome_ricetta) != 0)) {
@@ -323,15 +323,13 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
     nuovo_ordine->time_placed = t;
 
 
-    // Append to the end of the list
-    if (head_ordine == NULL) {
-        head_ordine = nuovo_ordine; // The list is empty, new order becomes the head
+    // Appendo alla fine della lista. Se è vuota diventa anche l'inizio.
+    if (tail_ordine == NULL) {
+        head_ordine = nuovo_ordine;
+        tail_ordine = nuovo_ordine;
     } else {
-        ordini *last_ordine = head_ordine;
-        while (last_ordine->next != NULL) { // Traverse to the end of the list
-            last_ordine = last_ordine->next;
-        }
-        last_ordine->next = nuovo_ordine; // Append the new order
+        tail_ordine->next =nuovo_ordine;
+        tail_ordine = nuovo_ordine;
     }
 
     // Posto dove incrementare il conto degli ordini nella ricetta
@@ -546,40 +544,29 @@ void rifornisci(char *buffer, const int t) {
     printf("rifornito\n");
 }
 
-void verifica_scadenze(const int t) {
+void verifica_scadenze(const int t) { //todo questa funzione andrebbe riscritta per chiarezza
     magazzino *current = head_magazzino;
 
-    while (current != NULL) {
-        ingrediente *ingr_ptr = current->ingredienti;
-        ingrediente *ingr_prev = NULL;
-
-        // Check for expired lots and remove them
-        while (ingr_ptr != NULL) {
-            if (ingr_ptr->expiry <= t) {
-                ingrediente *to_remove = ingr_ptr;
-                if (ingr_prev == NULL) {
-                    current->ingredienti = ingr_ptr->next;
-                } else {
-                    ingr_prev->next = ingr_ptr->next;
-                }
-                ingr_ptr = ingr_ptr->next;
-                free(to_remove);
-            } else {
-                ingr_prev = ingr_ptr;
-                ingr_ptr = ingr_ptr->next;
+    while (current) {
+        ingrediente **cur = &(current->ingredienti);
+        while (*cur) {
+            if ((*cur)->expiry < t) { // todo minore o (minore o uguale) ??
+                ingrediente *expired = *cur;
+                *cur = (*cur)->next;
+                free(expired);
             }
+            else {break;}
         }
-
-        // Move to the next magazzino node
         current = current->next;
     }
+
 }
 
 void rimuovi_ricetta(const char* nome_ricetta) {
     ricetta *current = head_ricetta; //todo deve utilizzare la ricerca ricette
 
     // Cerca la ricetta
-    while ((current != NULL) && strcmp(current->name, nome_ricetta) > 0) { //todo forse serve =!
+    while ((current != NULL) && strcmp(current->name, nome_ricetta) > 0) { //todo utilizzare la funzione di ricerca migliorata
         //fprintf(stderr, "ricetta da eliminare: %s ricetta attuale: %s\n", nome_ricetta, current->name);
         current = current->next;
 
@@ -770,7 +757,7 @@ magazzino* ricerca_pseudo_binaria_ingr(const char* nome_ingr) {
     magazzino *previous = NULL;
     int skip = ingredienti_totali / 2;  // Initially set skip to half of the list size
 
-    while (current != NULL && skip == 0) {
+    while (current != NULL && skip > 3) { // todo importante skip è da valutare
         magazzino *scanner = current;
         int step = 0;
 
@@ -817,20 +804,23 @@ magazzino* punt_ingrediente(const char* nome_ingr){
 
     // Se la lista è vuota, creo un ingrediente e lo uso come primo della lista
     if(pointer == NULL) {
-        if (ingredienti_totali > 0) { // TODO questo stato potrebbe essere raggiungibile se devo mettere l'ingrediente come primo in ordine alfabetico.
-            fprintf(stderr, "FATAL ERROR - 01");
-            return NULL;
-        }
-        else {
-            magazzino* nuovo_ingrediente = malloc(sizeof(magazzino));
-            if (nuovo_ingrediente == NULL) {
-                fprintf(stderr, "FATAL ERROR - 03");
-                return NULL;
-            }
+        magazzino* nuovo_ingrediente = malloc(sizeof(magazzino));
+                    if (nuovo_ingrediente == NULL) {
+                        fprintf(stderr, "FATAL ERROR - 03");
+                        return NULL;
+                    }
+
+        if (head_magazzino == NULL) {
             head_magazzino = nuovo_ingrediente;
-            ingredienti_totali += 1;
-            return nuovo_ingrediente;
-        }
+            strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
+            }
+        else {
+            nuovo_ingrediente->next = head_magazzino;
+            head_magazzino = nuovo_ingrediente;
+            strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
+            }
+        ingredienti_totali += 1;
+        return nuovo_ingrediente;
     }
 
     // Se è stato trovato l'ingrediente:
@@ -845,6 +835,7 @@ magazzino* punt_ingrediente(const char* nome_ingr){
         }
         nuovo_ingrediente->next = pointer->next;
         pointer->next = nuovo_ingrediente;
+        strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
         ingredienti_totali += 1;
         return nuovo_ingrediente;
     }
