@@ -131,7 +131,8 @@ int main(void)
             //todo qua va implementata la logica del corriere
             if(_VERBOSE){fprintf(stderr, "Corriere...\n");}
             carica_furgone(max_cargo, t);
-            cd_corriere = tempocorriere-1;
+            cd_corriere = tempocorriere;
+            cd_corriere -=1;
             if(_VERBOSE){fprintf(stderr, "OK\n");}
         }
         else {cd_corriere -= 1;}
@@ -197,8 +198,8 @@ int main(void)
         else if(buffer[2] == 'f'){
             if(_VERBOSE){fprintf(stderr, "Rifornimento...");}
             rifornisci(buffer, t);
-            prepara_ordini(t); // TODO ha senso preparare solo questi?
-            rifornimento_flag = 1;
+            //prepara_ordini(t); // TODO ha senso preparare solo questi?
+            //rifornimento_flag = 1;
             if(_VERBOSE){fprintf(stderr, "OK\n");}
 
         }
@@ -242,8 +243,8 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     nuova_ricetta->ingredienti = NULL;
     nuova_ricetta->prev = prev;
     nuova_ricetta->next = current;
-    nuova_ricetta->total_qta = 0;
-    nuova_ricetta->n_ord = 0;
+
+
 
     // Processa i token degli ingredienti
     ingrediente_ricetta *ultimo_ingrediente = NULL;
@@ -356,13 +357,13 @@ void prepara_ordini(const int current_time) { //TODO professore: è rilevante il
 
         // Controlla se ci sono abbastanza ingredienti nel magazzino
         while (ingrediente_ricetta_ptr != NULL) {
-            magazzino *magazzino_ptr = head_magazzino;
+            //magazzino *magazzino_ptr = head_magazzino;
 
-            int needed_quantity = ingrediente_ricetta_ptr->qta * current_ordine->qta;
+            int needed_quantity = (ingrediente_ricetta_ptr->qta) * (current_ordine->qta);
             // int found_quantity = 0;
 
 
-                magazzino_ptr = ingrediente_ricetta_ptr->ingr;
+            magazzino * magazzino_ptr = ingrediente_ricetta_ptr->ingr;
 
 
             // Raggruppa lotti con lo stesso ingrediente
@@ -389,7 +390,7 @@ void prepara_ordini(const int current_time) { //TODO professore: è rilevante il
 
         //fprintf(stderr, "now onto can fulfill %d \n", can_fulfill);
         if (can_fulfill) {
-            current_ricetta->n_ord--;
+
             // Rimuove gli ingredienti usati dal magazzino
             ingrediente_ricetta_ptr = current_ricetta->ingredienti;
 
@@ -477,6 +478,7 @@ void prepara_ordini(const int current_time) { //TODO professore: è rilevante il
             }
 
             free(current_ordine);
+            if(tail_ordine == current_ordine){tail_ordine = prev_ordine;}
             if (prev_ordine != NULL) {
                 current_ordine = prev_ordine->next; // Move to the next order if there is a previous order
             } else {
@@ -555,7 +557,7 @@ void verifica_scadenze(const int t) { //todo questa funzione andrebbe riscritta 
     while (current) {
         ingrediente **cur = &(current->ingredienti);
         while (*cur) {
-            if ((*cur)->expiry < t) { // todo minore o (minore o uguale) ??
+            if ((*cur)->expiry <= t) { // todo minore o (minore o uguale) ??
                 current->tot_av -=(*cur)->qta;
                 ingrediente *expired = *cur;
                 *cur = (*cur)->next;
@@ -635,6 +637,7 @@ void carica_furgone(const int max_cargo, int tempo) {
             fprintf(stderr, "Memory allocation failed for new in-carico order\n");
             return; // Early exit on memory allocation failure
         }
+        current->ricetta_ord->n_ord--;
         strcpy(new_in_carico->name, current->ricetta_ord->name);
         new_in_carico->qta = current->qta;
         new_in_carico->dim_tot = current->dim_tot;
