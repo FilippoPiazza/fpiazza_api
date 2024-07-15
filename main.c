@@ -78,6 +78,7 @@ void rimuovi_ricetta(const char* nome_ricetta);
 void carica_furgone(const int max_cargo, int tempo);
 ricetta* ricerca_pseudo_binaria(const char* nome_ricetta);
 magazzino* ricerca_pseudo_binaria_ingr(const char* nome_ingr); //this and the above should be merged somehow
+magazzino* punt_ingrediente(const char* nome_ingr);
 int read_line_unlocked(char *buffer, int max_size);
 void trim_newline(char *str);
 
@@ -95,7 +96,7 @@ ordini_in_carico *head_ordine_in_carico = NULL;
 int main(void)
 {
 
-    char* buffer = (char*)malloc(MAX_LINE_LENGTH * sizeof(char));
+    char* buffer = (char*)alloca(MAX_LINE_LENGTH * sizeof(char));
     if (buffer == NULL) {
         perror("Failed to allocate buffer");
         return EXIT_FAILURE;
@@ -156,7 +157,8 @@ int main(void)
             int idx = 0;
 
             char *nome_ricetta = token;
-            while (token != NULL && idx < (MAX_LINE_LENGTH / 2)) {
+            token = strtok(NULL, " \t\n");
+            while ((token != NULL) && idx < (MAX_LINE_LENGTH / 2)) {
                 tokens[idx] = token;
                 idx += 1;
                 token = strtok(NULL, " \t\n");
@@ -221,6 +223,7 @@ int main(void)
 }
 
 void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
+
     ricetta *insert_after = ricerca_pseudo_binaria(nome_ricetta);
     ricetta *current = head_ricetta;
     ricetta *prev = NULL;
@@ -242,9 +245,9 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     nuova_ricetta->total_qta = 0;
     nuova_ricetta->n_ord = 0;
 
-    // Processa i token degli ingredienti todo potrebbe aver senso linkare direttamente il nodo degli ingredienti nel magazzino
+    // Processa i token degli ingredienti
     ingrediente_ricetta *ultimo_ingrediente = NULL;
-    for (int i = 1; token_ingredienti[i] != NULL; i += 2) {
+    for (int i = 0; token_ingredienti[i] != NULL; i += 2) {
         ingrediente_ricetta *nuovo_ingrediente = malloc(sizeof(ingrediente_ricetta));
         if (nuovo_ingrediente == NULL) {
             fprintf(stderr, "Errore: Allocazione della memoria fallita per gli ingredienti\n");
@@ -255,28 +258,15 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
         nuovo_ingrediente->qta = atoi(token_ingredienti[i + 1]);
         nuovo_ingrediente->next = NULL;
         nuova_ricetta->total_qta += nuovo_ingrediente->qta;  // Aggiunge la quantità al totale
-        nuova_ricetta->n_ord = 0;
 
-        magazzino * insert_after_ingr = ricerca_pseudo_binaria_ingr( token_ingredienti[i]);
-        if ((insert_after_ingr != NULL) && (strcmp(insert_after_ingr->ingr_name, token_ingredienti[i]) == 0)) {
-            nuovo_ingrediente->ingr = insert_after_ingr;
-        }
-        else if ((insert_after_ingr != NULL) && (strcmp(insert_after_ingr->ingr_name, token_ingredienti[i]) < 0)) {
-            magazzino *new_node = malloc(sizeof(magazzino));
-            if (new_node == NULL) {
-                fprintf(stderr, "Errore: Allocazione della memoria fallita per il magazzino(creazione ricetta)\n");
-                return;
-            }
-            strcpy(new_node->ingr_name, token_ingredienti[i]);
-            if(insert_after_ingr->next != NULL){insert_after_ingr->next->prev = new_node;}
-            new_node->next = insert_after_ingr->next;
-            new_node->prev = insert_after_ingr;
-            insert_after_ingr->next=new_node;
-            ingredienti_totali +=1;
 
+        // Collego la ricetta al magazzino
+        magazzino * ingrediente_magazzino = punt_ingrediente(token_ingredienti[i]);
+        if ((ingrediente_magazzino != NULL) && (strcmp(ingrediente_magazzino->ingr_name, token_ingredienti[i]) == 0)) {
+            nuovo_ingrediente->ingr = ingrediente_magazzino;
         }
 
-
+        // TODO urgente cosa fa questa parte? mi sono dimenticato.
         if (ultimo_ingrediente == NULL) {
             nuova_ricetta->ingredienti = nuovo_ingrediente;
         } else {
@@ -285,6 +275,7 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
         ultimo_ingrediente = nuovo_ingrediente;
     }
 
+    // Inserisce la ricetta al posto corretto
     if (insert_after == NULL) {
         nuova_ricetta->next = head_ricetta;
         if (head_ricetta != NULL) {
@@ -299,6 +290,7 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
         }
         insert_after->next = nuova_ricetta;
     }
+
     ricette_totali += 1;
     printf("aggiunta\n");
 }
@@ -515,70 +507,40 @@ void rifornisci(char *buffer, const int t) {
         int qta = atoi(tokens[i + 1]);
         int expiry = atoi(tokens[i + 2]);
 
-        magazzino *current = head_magazzino, *prev = NULL;
-        while (current != NULL && strcmp(current->ingr_name, ingr_name) < 0) {
-            prev = current;
-            current = current->next;
+        magazzino* current = punt_ingrediente(ingr_name);
+        if(current == NULL){fprintf(stderr, "FATAL ERROR - 04"); return;}
+
+        // Inserisce i lotti di ingredienti in ordine di scadenza
+        ingrediente *ingr_ptr = current->ingredienti, *ingr_prev = NULL;
+        while (ingr_ptr != NULL && ingr_ptr->expiry < expiry) {
+            ingr_prev = ingr_ptr;
+            ingr_ptr = ingr_ptr->next;
         }
 
-        if (current != NULL && strcmp(current->ingr_name, ingr_name) == 0) {
-            // Inserisce gli ingredienti in ordine di scadenza
-            ingrediente *ingr_ptr = current->ingredienti, *ingr_prev = NULL;
-            while (ingr_ptr != NULL && ingr_ptr->expiry < expiry) {
-                ingr_prev = ingr_ptr;
-                ingr_ptr = ingr_ptr->next;
-            }
-            if (ingr_ptr != NULL && ingr_ptr->expiry == expiry) {
-                // Se c'è già un lotto con la stessa scadenza, aggiunge la nuova quantità
-                ingr_ptr->qta += qta;
-            } else {
-                // altrimenti aggiunge un nuovo lotto
-                ingrediente *new_ingrediente = malloc(sizeof(ingrediente));
-                if (new_ingrediente == NULL) {
-                    fprintf(stderr, "Errore: Allocazione della memoria fallita per l'ingrediente\n");
-                    return;
-                }
-                new_ingrediente->qta = qta;
-                new_ingrediente->expiry = expiry;
+        // Se c'è già un lotto con la stessa scadenza, ne aumenta la quantità
+        if (ingr_ptr != NULL && ingr_ptr->expiry == expiry) {
 
-                if (ingr_prev == NULL) {
-                    new_ingrediente->next = current->ingredienti;
-                    current->ingredienti = new_ingrediente;
-                } else {
-                    new_ingrediente->next = ingr_prev->next;
-                    ingr_prev->next = new_ingrediente;
-                }
-            }
-        } else {
-            // Se non c'é già un ingrediente con lo stesso nome, lo crea
-            magazzino *new_node = malloc(sizeof(magazzino));
-            if (new_node == NULL) {
-                fprintf(stderr, "Errore: Allocazione della memoria fallita per il magazzino\n");
-                return;
-            }
-            strcpy(new_node->ingr_name, ingr_name);
-            new_node->prev = new_node->next = NULL;
-            new_node->ingredienti = malloc(sizeof(ingrediente));
-            if (new_node->ingredienti == NULL) {
+            ingr_ptr->qta += qta;
+        }
+        // Altrimenti, crea un nuovo batch
+        else {
+            ingrediente *new_ingrediente = malloc(sizeof(ingrediente));
+            if (new_ingrediente == NULL) {
                 fprintf(stderr, "Errore: Allocazione della memoria fallita per l'ingrediente\n");
-                free(new_node);
                 return;
             }
-            new_node->ingredienti->qta = qta;
-            new_node->ingredienti->expiry = expiry;
-            new_node->ingredienti->next = NULL;
 
-            if (prev == NULL) {
-                new_node->next = head_magazzino;
-                if (head_magazzino != NULL) (head_magazzino)->prev = new_node;
-                head_magazzino = new_node;
-            } else {
-                new_node->next = prev->next;
-                new_node->prev = prev;
-                if (prev->next != NULL) prev->next->prev = new_node;
-                prev->next = new_node;
+            new_ingrediente->qta = qta;
+            new_ingrediente->expiry = expiry;
+
+            if (ingr_prev == NULL) {
+                new_ingrediente->next = current->ingredienti;
+                current->ingredienti = new_ingrediente;
             }
-            ingredienti_totali +=1;
+            else {
+                new_ingrediente->next = ingr_prev->next;
+                ingr_prev->next = new_ingrediente;
+            }
         }
     }
     printf("rifornito\n");
@@ -802,24 +764,25 @@ ricetta* ricerca_pseudo_binaria(const char* nome_ricetta) {
     }
     return current;  // Exact match found
 }
+
 magazzino* ricerca_pseudo_binaria_ingr(const char* nome_ingr) {
     magazzino *current = head_magazzino;
     magazzino *previous = NULL;
     int skip = ingredienti_totali / 2;  // Initially set skip to half of the list size
 
-    while (current != NULL && skip > 0) {
+    while (current != NULL && skip == 0) {
         magazzino *scanner = current;
         int step = 0;
 
         // Attempt to skip forward in the list
-        while (step < skip && scanner != NULL) {
+        while ((step < skip) && (scanner != NULL)) {
             previous = scanner;
             scanner = scanner->next;
             step++;
         }
 
         // Check position of scanner in relation to target
-        if (scanner == NULL || strcmp(scanner->ingr_name, nome_ingr) >= 0) {
+        if ((scanner == NULL) || strcmp(scanner->ingr_name, nome_ingr) >= 0) {
             if (skip == 1) {  // Final step: Determine exact insertion point
                 if (scanner == NULL || strcmp(scanner->ingr_name, nome_ingr) > 0) {
                     // Either at the end or between previous and scanner
@@ -835,7 +798,7 @@ magazzino* ricerca_pseudo_binaria_ingr(const char* nome_ingr) {
     }
 
     // If skip becomes zero, do linear search for exact position
-    while (current != NULL && strcmp(current->ingr_name, nome_ingr) < 0) {
+    while ((current != NULL) && strcmp(current->ingr_name, nome_ingr) < 0) {
         previous = current;
         current = current->next;
     }
@@ -844,4 +807,45 @@ magazzino* ricerca_pseudo_binaria_ingr(const char* nome_ingr) {
         return previous;  // Insert after previous
     }
     return current;  // Exact match found
+}
+
+magazzino* punt_ingrediente(const char* nome_ingr){
+    // Trovo la posizione corretta. La funzione restituisce la posizione in cui si trova l'ingrediente oppure la posizione precedente, se non esiste. Se è NULL la lista è vuota
+    magazzino* pointer = ricerca_pseudo_binaria_ingr(nome_ingr);
+
+    // Verifico se l'ingrediente esiste già, altrimenti lo creo e lo inserisco nella posizione corretta
+
+    // Se la lista è vuota, creo un ingrediente e lo uso come primo della lista
+    if(pointer == NULL) {
+        if (ingredienti_totali > 0) { // TODO questo stato potrebbe essere raggiungibile se devo mettere l'ingrediente come primo in ordine alfabetico.
+            fprintf(stderr, "FATAL ERROR - 01");
+            return NULL;
+        }
+        else {
+            magazzino* nuovo_ingrediente = malloc(sizeof(magazzino));
+            if (nuovo_ingrediente == NULL) {
+                fprintf(stderr, "FATAL ERROR - 03");
+                return NULL;
+            }
+            head_magazzino = nuovo_ingrediente;
+            ingredienti_totali += 1;
+            return nuovo_ingrediente;
+        }
+    }
+
+    // Se è stato trovato l'ingrediente:
+    else if (strcmp(nome_ingr, pointer->ingr_name) == 0){return pointer;}
+
+    // altrimenti lo creo e lo inserisco al posto giusto
+    else {
+        magazzino* nuovo_ingrediente = malloc(sizeof(magazzino));
+        if (nuovo_ingrediente == NULL) {
+            fprintf(stderr, "FATAL ERROR - 02");
+            return NULL;
+        }
+        nuovo_ingrediente->next = pointer->next;
+        pointer->next = nuovo_ingrediente;
+        ingredienti_totali += 1;
+        return nuovo_ingrediente;
+    }
 }
