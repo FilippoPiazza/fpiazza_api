@@ -78,7 +78,7 @@ typedef struct ordini_in_carico
 
 void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti);
 void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t);
-void prepara_ordini(const int current_time);
+void prepara_ordini(const int current_time, ordini* ordine, ordini* extail);
 void rifornisci(char *buffer, const int t);
 void verifica_scadenze(const int t);
 void rimuovi_ricetta(const char* nome_ricetta);
@@ -191,13 +191,11 @@ int main(void)
         // se rifornimento
         else if(buffer[2] == 'f'){
             rifornisci(buffer, t);
-            //prepara_ordini(t); // TODO ha senso preparare solo questi?
-            //rifornimento_flag = 1;
-
+            prepara_ordini(-1, NULL, NULL);
         }
 
-        prepara_ordini(-1); // verifica
-
+         // verifica
+        //prepara_ordini(-1, NULL, NULL);
         t += 1;
         memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
 
@@ -273,7 +271,7 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
 }
 
 void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) {
-
+    ordini* extail = NULL;
     // Ricerca della ricetta nella lista ordinata
     ricetta *ricetta_corrente = ricerca_pseudo_binaria(nome_ricetta);
 
@@ -298,6 +296,7 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
         tail_ordine = nuovo_ordine;
     } else {
         tail_ordine->next =nuovo_ordine;
+        extail = tail_ordine;
         tail_ordine = nuovo_ordine;
     }
 
@@ -305,35 +304,43 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
     ricetta_corrente->n_ord++;
 
     fwrite_unlocked(accettato, 1, 10, stdout);
+    prepara_ordini(-1, tail_ordine, extail);
 }
 
-void prepara_ordini(const int current_time) {
+void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* extail) {
     ordini *current_ordine = head_ordine;
     ordini *prev_ordine = NULL;
+    if(ordine_ingresso != NULL){current_ordine = ordine_ingresso; prev_ordine = extail;}
 
     while (current_ordine != NULL) {
         ricetta *current_ricetta = current_ordine->ricetta_ord;
         ingrediente_ricetta *ingrediente_ricetta_ptr = current_ricetta->ingredienti;
+
         int can_fulfill = 1;  // Supponiamo di poter soddisfare l'ordine
         // Controlla se ci sono abbastanza ingredienti nel magazzino
+
         while (ingrediente_ricetta_ptr != NULL) {
             int needed_quantity = (ingrediente_ricetta_ptr->qta) * (current_ordine->qta);
             if (ingrediente_ricetta_ptr->ingr->tot_av < needed_quantity) {
                 can_fulfill = 0;  // Non ci sono abbastanza ingredienti
                 break;
             }
+            // magazzino * magazzino_ptr = ingrediente_ricetta_ptr->ingr;
             ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
         }
+
         if (can_fulfill) {
+
             // Rimuove gli ingredienti usati dal magazzino
             ingrediente_ricetta_ptr = current_ricetta->ingredienti;
+
             while (ingrediente_ricetta_ptr != NULL) {
-                int needed_quantity = ingrediente_ricetta_ptr->qta * current_ordine->qta;
+                int needed_quantity = (ingrediente_ricetta_ptr->qta) * (current_ordine->qta);
                 // Cerca l'ingrediente nel magazzino
                 magazzino* magazzino_ptr = ingrediente_ricetta_ptr->ingr;
                 if (magazzino_ptr != NULL) {
-                    ingrediente *ingrediente_ptr = magazzino_ptr->ingredienti;
-                    while ((ingrediente_ptr != NULL) && needed_quantity > 0) {
+                    ingrediente* ingrediente_ptr = magazzino_ptr->ingredienti;
+                    while ((ingrediente_ptr != NULL) && (needed_quantity > 0)) {
                         if (ingrediente_ptr->qta <= needed_quantity) {
                             needed_quantity -= ingrediente_ptr->qta;
                             // Removing ingredient from list
@@ -345,6 +352,7 @@ void prepara_ordini(const int current_time) {
                         } else {
                             magazzino_ptr->tot_av -= needed_quantity;
                             ingrediente_ptr->qta -= needed_quantity;
+                            needed_quantity = 0;
                         }
                     }
                 }
@@ -363,17 +371,18 @@ void prepara_ordini(const int current_time) {
             // Aggiunge l'ordine completato alla lista ordini_completi
             ordini_completi *new_ordine_completo = malloc(sizeof(ordini_completi));
 
-            new_ordine_completo->ricetta_ord=current_ordine->ricetta_ord;
+            new_ordine_completo->ricetta_ord = current_ordine->ricetta_ord;
             new_ordine_completo->qta = current_ordine->qta;
-            new_ordine_completo->dim_tot = current_ricetta->total_qta * current_ordine->qta;
+            new_ordine_completo->dim_tot = (current_ricetta->total_qta) * (current_ordine->qta);
             new_ordine_completo->time_placed = current_ordine->time_placed;
+            new_ordine_completo->next = NULL;
 
-            if ((head_ordine_completi == NULL) || (head_ordine_completi)->time_placed >= new_ordine_completo->time_placed) {
+            if ((head_ordine_completi == NULL) || ((head_ordine_completi)->time_placed >= new_ordine_completo->time_placed)) {
                 new_ordine_completo->next = head_ordine_completi;
                 head_ordine_completi = new_ordine_completo;
             } else {
                 ordini_completi *temp = head_ordine_completi;
-                while (temp->next && temp->next->time_placed < new_ordine_completo->time_placed) {
+                while ((temp->next != NULL) && (temp->next->time_placed < new_ordine_completo->time_placed)) {
                     temp = temp->next;
                 }
                 new_ordine_completo->next = temp->next;
@@ -422,7 +431,7 @@ void rifornisci(char *buffer, const int t) {
 
         // Inserisce i lotti di ingredienti in ordine di scadenza
         ingrediente *ingr_ptr = current->ingredienti, *ingr_prev = NULL;
-        while (ingr_ptr != NULL && ingr_ptr->expiry < expiry) {
+        while ((ingr_ptr != NULL) && (ingr_ptr->expiry < expiry)) {
             ingr_prev = ingr_ptr;
             ingr_ptr = ingr_ptr->next;
         }
@@ -460,7 +469,7 @@ void verifica_scadenze(const int t) { //todo questa funzione andrebbe riscritta 
     while (current != NULL) {
         ingrediente **cur = &(current->ingredienti);
         while (*cur) {
-            if ((*cur)->expiry <= t) { // todo minore o (minore o uguale) ??
+            if ((*cur)->expiry <= t) {
                 current->tot_av -=(*cur)->qta;
                 ingrediente *expired = *cur;
                 *cur = (*cur)->next;
@@ -488,7 +497,7 @@ void rimuovi_ricetta(const char* nome_ricetta) {
     }
 
     // Controlla se ci sono ordini presenti
-    else if (da_rimuovere->n_ord != 0) {
+    else if (da_rimuovere->n_ord > 0) {
         fwrite_unlocked(ordinisospeso, 1, 18, stdout);
         return;
     }
@@ -523,7 +532,8 @@ void carica_furgone(const int max_cargo, int tempo) {
         return;
     }
     while (current != NULL) {
-        if ((current_cargo + current->dim_tot) > max_cargo) {
+        if (((current_cargo + current->dim_tot)) > max_cargo) {
+            fprintf(stderr, "Furgone oltre carico");
             break; // Stop if adding this order exceeds max cargo capacity
         }
 
@@ -638,7 +648,7 @@ ricetta* ricerca_pseudo_binaria(const char* nome_ricetta) {
     }
 
     // If skip becomes zero, do linear search for exact position
-    while (current != NULL && strcmp(current->name, nome_ricetta) < 0) {
+    while ((current != NULL) && strcmp(current->name, nome_ricetta) < 0) {
         previous = current;
         current = current->next;
     }
@@ -695,12 +705,20 @@ magazzino* punt_ingrediente(const char* nome_ingr){
     // Se la lista è vuota, creo un ingrediente e lo uso come primo della lista
     if(pointer == NULL) {
         magazzino* nuovo_ingrediente = malloc(sizeof(magazzino));
-        nuovo_ingrediente->prev = NULL;
-        nuovo_ingrediente->tot_av = 0;
-        nuovo_ingrediente->ingredienti = NULL;
-        head_magazzino = nuovo_ingrediente;
-        strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
-        nuovo_ingrediente->next = NULL;
+                    if (nuovo_ingrediente == NULL) {
+                        fprintf(stderr, "FATAL ERROR - 03");
+                        return NULL;
+                    }
+
+        if (head_magazzino == NULL) {
+            head_magazzino = nuovo_ingrediente;
+            strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
+            }
+        else {
+            nuovo_ingrediente->next = head_magazzino;
+            head_magazzino = nuovo_ingrediente;
+            strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
+            }
         ingredienti_totali += 1;
         return nuovo_ingrediente;
     }
@@ -716,9 +734,6 @@ magazzino* punt_ingrediente(const char* nome_ingr){
         pointer->next = nuovo_ingrediente;
         strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
         ingredienti_totali += 1;
-        nuovo_ingrediente->prev = NULL;
-        nuovo_ingrediente->tot_av = 0;
-        nuovo_ingrediente->ingredienti = NULL;
         return nuovo_ingrediente;
     }
 }
