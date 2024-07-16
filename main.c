@@ -126,7 +126,6 @@ int main(void)
     int t = 0;
 
     while(1){
-        fprintf(stderr, "%d\n",t);
         verifica_scadenze(t);
 
 
