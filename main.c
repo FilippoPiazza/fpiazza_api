@@ -216,6 +216,7 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     }
 
     ricetta* nuova_ricetta = malloc(sizeof(struct ricetta)); //alloco memoria
+    bzero(nuova_ricetta, sizeof(ricetta));
     strcpy(nuova_ricetta->name, nome_ricetta);
     nuova_ricetta->ingredienti = NULL;
     nuova_ricetta->prev = prev;
@@ -227,6 +228,7 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     ingrediente_ricetta *ultimo_ingrediente = NULL;
     for (int i = 0; token_ingredienti[i] != NULL; i += 2) {
         ingrediente_ricetta *nuovo_ingrediente = malloc(sizeof(ingrediente_ricetta));
+        bzero(nuovo_ingrediente, sizeof(ingrediente_ricetta));
         nuovo_ingrediente->qta = atoi(token_ingredienti[i + 1]);
         nuovo_ingrediente->next = NULL;
         nuova_ricetta->total_qta += nuovo_ingrediente->qta;  // Aggiunge la quantità al totale
@@ -283,6 +285,7 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
 
     // Creazione di un nuovo ordine
     ordini *nuovo_ordine = malloc(sizeof(ordini));
+    bzero(nuovo_ordine, sizeof(ordini));
 
     nuovo_ordine->qta = quantita;
     nuovo_ordine->ricetta_ord = ricetta_corrente;
@@ -370,6 +373,7 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
 
             // Aggiunge l'ordine completato alla lista ordini_completi
             ordini_completi *new_ordine_completo = malloc(sizeof(ordini_completi));
+            bzero(new_ordine_completo, sizeof(ordini_completi));
 
             new_ordine_completo->ricetta_ord = current_ordine->ricetta_ord;
             new_ordine_completo->qta = current_ordine->qta;
@@ -445,6 +449,7 @@ void rifornisci(char *buffer, const int t) {
         // Altrimenti, crea un nuovo batch
         else {
             ingrediente *new_ingrediente = malloc(sizeof(ingrediente));
+            bzero(new_ingrediente, sizeof(ingrediente));
 
             current->tot_av +=qta;
             new_ingrediente->qta = qta;
@@ -467,13 +472,14 @@ void verifica_scadenze(const int t) { //todo questa funzione andrebbe riscritta 
     magazzino *current = head_magazzino;
 
     while (current != NULL) {
-        ingrediente **cur = &(current->ingredienti);
-        while (*cur) {
-            if ((*cur)->expiry <= t) {
-                current->tot_av -=(*cur)->qta;
-                ingrediente *expired = *cur;
-                *cur = (*cur)->next;
+        ingrediente *cur = current->ingredienti;
+        while (cur != NULL) {
+            if (cur->expiry <= t) {
+                current->tot_av -=cur->qta;
+                ingrediente *expired = cur;
+                cur = cur->next;
                 free(expired);
+                expired = NULL;
             }
             else {break;}
         }
@@ -533,12 +539,12 @@ void carica_furgone(const int max_cargo, int tempo) {
     }
     while (current != NULL) {
         if (((current_cargo + current->dim_tot)) > max_cargo) {
-            fprintf(stderr, "Furgone oltre carico");
             break; // Stop if adding this order exceeds max cargo capacity
         }
 
         // Create new in-carico order
         ordini_in_carico *new_in_carico = malloc(sizeof(ordini_in_carico));
+        bzero(new_in_carico, sizeof(ordini_in_carico));
 
         current->ricetta_ord->n_ord--;
         strcpy(new_in_carico->name, current->ricetta_ord->name);
@@ -547,6 +553,7 @@ void carica_furgone(const int max_cargo, int tempo) {
         new_in_carico->time_placed = current->time_placed;
         new_in_carico->next = NULL;
 
+        /*
         // Insert new order into ordini_in_carico, sorted by dim_tot (descending) and then by time_placed (ascending for same dim_tot)
         if ((head_ordine_in_carico == NULL) ||
             (head_ordine_in_carico)->dim_tot < new_in_carico->dim_tot || // Check for larger dim_tot to be at the front
@@ -575,7 +582,31 @@ void carica_furgone(const int max_cargo, int tempo) {
                     prev_in_carico->next = new_in_carico;
                 }
             }
-
+        */
+        // Insert new order into ordini_in_carico, sorted by dim_tot (descending) and then by time_placed (ascending for same dim_tot)
+        if ((head_ordine_in_carico == NULL) ||
+            (head_ordine_in_carico)->dim_tot < new_in_carico->dim_tot || // Check for larger dim_tot to be at the front
+            ((head_ordine_in_carico)->dim_tot == new_in_carico->dim_tot && (head_ordine_in_carico)->time_placed > new_in_carico->time_placed)) { // Earlier time_placed should come first for the same dim_tot
+            // Insert at the head if it's the largest or equally large but earlier
+            new_in_carico->next = head_ordine_in_carico;
+            head_ordine_in_carico = new_in_carico;
+            } else {
+                // Find the correct position to insert
+                ordini_in_carico *curr_in_carico = head_ordine_in_carico, *prev_in_carico = NULL;
+                while (curr_in_carico != NULL &&
+                       (curr_in_carico->dim_tot > new_in_carico->dim_tot || // Continue if current item is larger
+                       (curr_in_carico->dim_tot == new_in_carico->dim_tot && curr_in_carico->time_placed < new_in_carico->time_placed))) { // Continue if the current time is earlier
+                    prev_in_carico = curr_in_carico;
+                    curr_in_carico = curr_in_carico->next;
+                       }
+                // Insert new item before the first item that has either a smaller dim_tot or the same dim_tot but a later time_placed
+                new_in_carico->next = curr_in_carico;
+                if (prev_in_carico == NULL) {
+                    head_ordine_in_carico = new_in_carico; // This line is corrected to set head_ordine_in_carico correctly
+                } else {
+                    prev_in_carico->next = new_in_carico;
+                }
+            }
 
         // stampa dettagli ordini
 
@@ -662,13 +693,13 @@ ricetta* ricerca_pseudo_binaria(const char* nome_ricetta) {
 magazzino* ricerca_pseudo_binaria_ingr(const char* nome_ingr) {
     magazzino *current = head_magazzino;
     magazzino *previous = NULL;
-    int skip = ingredienti_totali / 2;  // Initially set skip to half of the list size
+    int skip = ingredienti_totali / 2;
 
-    while (current != NULL && skip > 3) { // todo importante skip è da valutare
+    while (current != NULL && skip > 3) {
         magazzino *scanner = current;
         int step = 0;
 
-        // Attempt to skip forward in the list
+        // Attempt to skip forward in the lists
         while ((step < skip) && (scanner != NULL)) {
             previous = scanner;
             scanner = scanner->next;
@@ -705,10 +736,8 @@ magazzino* punt_ingrediente(const char* nome_ingr){
     // Se la lista è vuota, creo un ingrediente e lo uso come primo della lista
     if(pointer == NULL) {
         magazzino* nuovo_ingrediente = malloc(sizeof(magazzino));
-                    if (nuovo_ingrediente == NULL) {
-                        fprintf(stderr, "FATAL ERROR - 03");
-                        return NULL;
-                    }
+        bzero(nuovo_ingrediente, sizeof(magazzino));
+
 
         if (head_magazzino == NULL) {
             head_magazzino = nuovo_ingrediente;
@@ -729,6 +758,7 @@ magazzino* punt_ingrediente(const char* nome_ingr){
     // altrimenti lo creo e lo inserisco al posto giusto
     else {
         magazzino* nuovo_ingrediente = malloc(sizeof(magazzino));
+        bzero(nuovo_ingrediente, sizeof(magazzino));
 
         nuovo_ingrediente->next = pointer->next;
         pointer->next = nuovo_ingrediente;
