@@ -124,6 +124,9 @@ int main(void)
     int t = 0;
 
     while(1){
+        verifica_scadenze(t);
+        if(_VERBOSE){fprintf(stderr, "Verifica scadenze ok\n");}
+
         if(_VERBOSE){fprintf(stderr, "T %d\n", t);}
 
         //controllo se arriva il corriere
@@ -205,8 +208,7 @@ int main(void)
         }
 
         //verifico per ogni ingrediente le cose scadute
-        verifica_scadenze(t);
-        if(_VERBOSE){fprintf(stderr, "Verifica scadenze ok\n");}
+
 
         if(rifornimento_flag == 0) {
             if(_VERBOSE){fprintf(stderr, "Preparo ordini...");}
@@ -571,24 +573,21 @@ void verifica_scadenze(const int t) { //todo questa funzione andrebbe riscritta 
 }
 
 void rimuovi_ricetta(const char* nome_ricetta) {
-    ricetta *current = head_ricetta; //todo deve utilizzare la ricerca ricette
 
     // Cerca la ricetta
-    while ((current != NULL) && strcmp(current->name, nome_ricetta) > 0) { //todo utilizzare la funzione di ricerca migliorata
-        //fprintf(stderr, "ricetta da eliminare: %s ricetta attuale: %s\n", nome_ricetta, current->name);
-        current = current->next;
-
-    }
-    //fprintf(stderr, "Eliminazione ricetta %s, while superato, current %p\n", nome_ricetta, current);
-    // Controlla se la ricetta è stata trovata
-    if (current == NULL) {
+    ricetta* da_rimuovere = ricerca_pseudo_binaria(nome_ricetta);
+    if(da_rimuovere== NULL) {
         printf("non presente\n");
-        //fprintf(stderr, "ricetta assente: %s\n", nome_ricetta);
+        return;
+    }
+
+    if(strcmp(nome_ricetta, da_rimuovere->name) !=0) {
+        printf("non presente\n");
         return;
     }
 
     // Controlla se ci sono ordini presenti
-    else if (current->n_ord != 0) {
+    else if (da_rimuovere->n_ord != 0) {
         //fprintf(stderr, "Eliminazione ricetta %s, if superato\n", nome_ricetta);
         printf("ordini in sospeso\n");
         //fprintf(stderr, "ordini in sospeso: %s ricetta attuale: %s\n", nome_ricetta, current->name);
@@ -596,24 +595,24 @@ void rimuovi_ricetta(const char* nome_ricetta) {
     }
 
     // Rimuove la ricetta dalla lista
-    if (current->prev != NULL) {
-        current->prev->next = current->next;
+    if (da_rimuovere->prev != NULL) {
+        da_rimuovere->prev->next = da_rimuovere->next;
     } else {
-        head_ricetta = current->next;
+        head_ricetta = da_rimuovere->next;
     }
 
-    if (current->next != NULL) {
-        current->next->prev = current->prev;
+    if (da_rimuovere->next != NULL) {
+        da_rimuovere->next->prev = da_rimuovere->prev;
     }
 
     // Libera la memoria degli ingredienti
-    ingrediente_ricetta *ing = current->ingredienti;
+    ingrediente_ricetta *ing = da_rimuovere->ingredienti;
     while (ing != NULL) {
         ingrediente_ricetta *temp = ing;
         ing = ing->next;
         free(temp);
     }
-    free(current);
+    free(da_rimuovere);
     //fprintf(stderr, "ricetta rimossa: %s\n", nome_ricetta);
     printf("rimossa\n");
 }
@@ -724,7 +723,7 @@ ricetta* ricerca_pseudo_binaria(const char* nome_ricetta) {
     ricetta *previous = NULL;
     int skip = ricette_totali / 2;  // Initially set skip to half of the list size
 
-    while (current != NULL && skip > 0) {
+    while (current != NULL && skip > 3) {
         ricetta *scanner = current;
         int step = 0;
 
