@@ -695,16 +695,9 @@ magazzino* punt_ingrediente(const char* nome_ingr){
     // Se la lista è vuota, creo un ingrediente e lo uso come primo della lista
     if(pointer == NULL) {
         magazzino* nuovo_ingrediente = malloc(sizeof(magazzino));
-
-        if (head_magazzino == NULL) {
             head_magazzino = nuovo_ingrediente;
             strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
-            }
-        else {
             nuovo_ingrediente->next = head_magazzino;
-            head_magazzino = nuovo_ingrediente;
-            strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
-            }
         ingredienti_totali += 1;
         return nuovo_ingrediente;
     }
