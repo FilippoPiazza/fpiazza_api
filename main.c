@@ -8,6 +8,14 @@
 #include<string.h>
 #include<stdlib.h>
 
+const char *accettato = "accettato\n";
+const char *aggiunto = "aggiunta\n";
+const char *rifiutato = "rifiutato\n";
+const char *ordinisospeso = "ordini in sospeso\n";
+const char *rimosso = "rimossa\n";
+const char *ignorato = "ignorato\n";
+const char *non_presente = "non presente\n";
+
 
 typedef struct magazzino
 {
@@ -102,13 +110,8 @@ int main(void)
         perror("Failed to allocate buffer");
         return EXIT_FAILURE;
     }
-    // generazione liste
-
-
-    int rifornimento_flag = 0;
 
     //input iniziale di configurazione del furgone
-
     if(read_line_unlocked(buffer, MAX_LINE_LENGTH) == 0){return 69420;}
     char *ptr = buffer;
     const int tempocorriere = strtol(ptr, &ptr, 10);
@@ -125,18 +128,13 @@ int main(void)
 
     while(1){
         verifica_scadenze(t);
-        if(_VERBOSE){fprintf(stderr, "Verifica scadenze ok\n");}
 
-        if(_VERBOSE){fprintf(stderr, "T %d\n", t);}
 
         //controllo se arriva il corriere
         if (cd_corriere == 0) {
-            //todo qua va implementata la logica del corriere
-            if(_VERBOSE){fprintf(stderr, "Corriere...\n");}
             carica_furgone(max_cargo, t);
             cd_corriere = tempocorriere;
             cd_corriere -=1;
-            if(_VERBOSE){fprintf(stderr, "OK\n");}
         }
         else {cd_corriere -= 1;}
         /* comandi:
@@ -153,7 +151,6 @@ int main(void)
 
         // se aggiungi_ricetta
         if(buffer[2] == 'g'){
-            if(_VERBOSE){fprintf(stderr, "Aggiungo ricetta...");}
             char *token = strtok(buffer + 17, " \t\n"); //verifica offset
             // *token è il nome della ricetta
             //if (token == NULL) return; \\ nome ricetta assente
@@ -172,20 +169,16 @@ int main(void)
             tokens[idx] = NULL; // aggiungo terminatore nullo alla lista dei token
 
             aggiungi_ricetta(nome_ricetta, tokens);
-            if(_VERBOSE){fprintf(stderr, "OK\n");}
             }
 
         // se rimuovi_ricetta
         else if(buffer[2] == 'm'){
-            if(_VERBOSE){fprintf(stderr, "Rimuovo ricetta...");}
             char *token = strtok(buffer + 16, " "); //verifica offset
             rimuovi_ricetta(token);
-            if(_VERBOSE){fprintf(stderr, "OK\n");}
         }
 
         // se ordine
         else if(buffer[2] == 'd'){
-            if(_VERBOSE){fprintf(stderr, "Aggiungo ordine...");}
             char *nome_ricetta = strtok(buffer + 7, " "); //verifica offset
             char *qta_str = strtok(NULL, " \t\n");
             if (nome_ricetta == NULL || qta_str == NULL) {
@@ -194,30 +187,19 @@ int main(void)
             }
             int quantita = atoi(qta_str);
             aggiungi_ordine(nome_ricetta, quantita, t);
-            if(_VERBOSE){fprintf(stderr, "OK\n");}
         }
 
         // se rifornimento
         else if(buffer[2] == 'f'){
-            if(_VERBOSE){fprintf(stderr, "Rifornimento...");}
             rifornisci(buffer, t);
             //prepara_ordini(t); // TODO ha senso preparare solo questi?
             //rifornimento_flag = 1;
-            if(_VERBOSE){fprintf(stderr, "OK\n");}
 
         }
 
-        //verifico per ogni ingrediente le cose scadute
-
-
-        if(rifornimento_flag == 0) {
-            if(_VERBOSE){fprintf(stderr, "Preparo ordini...");}
-            prepara_ordini(-1); // verifica
-            if(_VERBOSE){fprintf(stderr, "OK\n");}
-        }
+        prepara_ordini(-1); // verifica
 
         t += 1;
-        rifornimento_flag = 0;
         memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
 
 
@@ -232,7 +214,7 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     ricetta *prev = NULL;
 
     if ((insert_after != NULL) && (strcmp(insert_after->name, nome_ricetta) == 0)) {
-        printf("ignorato\n");
+        fwrite_unlocked(ignorato, 1, 9, stdout);
         return;
     }
 
@@ -298,7 +280,7 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     }
 
     ricette_totali += 1;
-    printf("aggiunta\n");
+    fwrite_unlocked(aggiunto, 1, 9, stdout);
 }
 
 void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) {
@@ -308,7 +290,7 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
 
     // Verifica se la ricetta è stata trovata e corrisponde esattamente
     if ((ricetta_corrente == NULL) || (strcmp(ricetta_corrente->name, nome_ricetta) != 0)) {
-        printf("rifiutato\n");
+        fwrite_unlocked(rifiutato, 1, 10, stdout);
         return;
     }
 
@@ -337,7 +319,7 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
     // Posto dove incrementare il conto degli ordini nella ricetta
     ricetta_corrente->n_ord++;
 
-    printf("accettato\n");
+    fwrite_unlocked(accettato, 1, 10, stdout);
 }
 
 void prepara_ordini(const int current_time) { //TODO professore: è rilevante il fatto che devo fare immediatamente la analisi?
@@ -359,75 +341,54 @@ void prepara_ordini(const int current_time) { //TODO professore: è rilevante il
 
         // Controlla se ci sono abbastanza ingredienti nel magazzino
         while (ingrediente_ricetta_ptr != NULL) {
-            //magazzino *magazzino_ptr = head_magazzino;
+
 
             int needed_quantity = (ingrediente_ricetta_ptr->qta) * (current_ordine->qta);
-            // int found_quantity = 0;
+
 
 
             magazzino * magazzino_ptr = ingrediente_ricetta_ptr->ingr;
 
-
-            // Raggruppa lotti con lo stesso ingrediente
-            /*
-            if (magazzino_ptr != NULL) {
-                ingrediente *ingrediente_ptr = magazzino_ptr->ingredienti;
-
-                while (ingrediente_ptr != NULL && found_quantity < needed_quantity) {
-                    found_quantity += ingrediente_ptr->qta;
-                    ingrediente_ptr = ingrediente_ptr->next;
-                }
-            }
-            */
-
-
             if (magazzino_ptr->tot_av < needed_quantity) {
                 can_fulfill = 0;  // Non ci sono abbastanza ingredienti
-                // fprintf(stderr, "non abbastanza ingredienti per ricetta %s: found %d needed %d\n", current_ricetta->name, found_quantity, needed_quantity);
                 break;
             }
 
             ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
         }
 
-        //fprintf(stderr, "now onto can fulfill %d \n", can_fulfill);
         if (can_fulfill) {
 
             // Rimuove gli ingredienti usati dal magazzino
             ingrediente_ricetta_ptr = current_ricetta->ingredienti;
 
             while (ingrediente_ricetta_ptr != NULL) {
-                magazzino *magazzino_ptr = head_magazzino;
-
                 int needed_quantity = ingrediente_ricetta_ptr->qta * current_ordine->qta;
 
-
                 // Cerca l'ingrediente nel magazzino
-                magazzino_ptr = ingrediente_ricetta_ptr->ingr;
+                magazzino* magazzino_ptr = ingrediente_ricetta_ptr->ingr;
 
                 if (magazzino_ptr != NULL) {
 
                     ingrediente *ingrediente_ptr = magazzino_ptr->ingredienti;
-                    //ingrediente *ingrediente_prev = NULL; /todo questa era dichiarata
 
                     while ((ingrediente_ptr != NULL) && needed_quantity > 0) {
-                        //fprintf(stderr, "sane serbia %p %d       ", (void *)ingrediente_ptr, needed_quantity);
                         if (ingrediente_ptr->qta <= needed_quantity) {
-                            needed_quantity -= ingrediente_ptr->qta;  // Decrease needed by available
+                            needed_quantity -= ingrediente_ptr->qta;
 
                             // Removing ingredient from list
                             magazzino_ptr->tot_av -= ingrediente_ptr->qta;
                             ingrediente *to_remove = ingrediente_ptr;
-                            ingrediente_ptr = ingrediente_ptr->next;  // Move to next ingredient before removing
+                            ingrediente_ptr = ingrediente_ptr->next;
 
-                            magazzino_ptr->ingredienti = ingrediente_ptr;  // Update head if first ingredient
+                            magazzino_ptr->ingredienti = ingrediente_ptr;
 
 
-                            free(to_remove);  // Free the removed ingredient
+                            free(to_remove);
                         } else {
                             magazzino_ptr->tot_av -= needed_quantity;
-                            ingrediente_ptr->qta -= needed_quantity;  // Reduce quantity of current ingredient
-                            needed_quantity = 0;  // Set needed to zero as we've found enough
+                            ingrediente_ptr->qta -= needed_quantity;
+                            needed_quantity = 0;
                             //ingrediente_prev = ingrediente_ptr;
                             //ingrediente_ptr = ingrediente_ptr->next;
                         }
@@ -577,19 +538,19 @@ void rimuovi_ricetta(const char* nome_ricetta) {
     // Cerca la ricetta
     ricetta* da_rimuovere = ricerca_pseudo_binaria(nome_ricetta);
     if(da_rimuovere== NULL) {
-        printf("non presente\n");
+        fwrite_unlocked(non_presente, 1, 13, stdout);
         return;
     }
 
     if(strcmp(nome_ricetta, da_rimuovere->name) !=0) {
-        printf("non presente\n");
+        fwrite_unlocked(non_presente, 1, 13, stdout);
         return;
     }
 
     // Controlla se ci sono ordini presenti
     else if (da_rimuovere->n_ord != 0) {
         //fprintf(stderr, "Eliminazione ricetta %s, if superato\n", nome_ricetta);
-        printf("ordini in sospeso\n");
+        fwrite_unlocked(ordinisospeso, 1, 18, stdout);
         //fprintf(stderr, "ordini in sospeso: %s ricetta attuale: %s\n", nome_ricetta, current->name);
         return;
     }
@@ -614,7 +575,7 @@ void rimuovi_ricetta(const char* nome_ricetta) {
     }
     free(da_rimuovere);
     //fprintf(stderr, "ricetta rimossa: %s\n", nome_ricetta);
-    printf("rimossa\n");
+    fwrite_unlocked(rimosso, 1, 8, stdout);
 }
 
 void carica_furgone(const int max_cargo, int tempo) {
@@ -736,13 +697,6 @@ ricetta* ricerca_pseudo_binaria(const char* nome_ricetta) {
 
         // Check position of scanner in relation to target
         if (scanner == NULL || strcmp(scanner->name, nome_ricetta) >= 0) {
-            if (skip == 1) {  // Final step: Determine exact insertion point
-                if (scanner == NULL || strcmp(scanner->name, nome_ricetta) > 0) {
-                    // Either at the end or between previous and scanner
-                    return previous;  // Insert after previous
-                }
-                return scanner;  // Exact match or insert before scanner
-            }
             skip /= 2;  // Halve the skip size
         } else {
             // Move the current forward since target is further
@@ -780,13 +734,6 @@ magazzino* ricerca_pseudo_binaria_ingr(const char* nome_ingr) {
 
         // Check position of scanner in relation to target
         if ((scanner == NULL) || strcmp(scanner->ingr_name, nome_ingr) >= 0) {
-            if (skip == 1) {  // Final step: Determine exact insertion point
-                if (scanner == NULL || strcmp(scanner->ingr_name, nome_ingr) > 0) {
-                    // Either at the end or between previous and scanner
-                    return previous;  // Insert after previous
-                }
-                return scanner;  // Exact match or insert before scanner
-            }
             skip /= 2;  // Halve the skip size
         } else {
             // Move the current forward since target is further
