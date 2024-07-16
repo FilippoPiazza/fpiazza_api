@@ -1,8 +1,7 @@
 // Filippo Piazza
 // 2024
 #define MAX_WORD_LENGTH 128
-#define MAX_LINE_LENGTH 16384
-#define _VERBOSE 0
+#define MAX_LINE_LENGTH 32768
 
 #include<stdio.h>
 #include<string.h>
@@ -219,10 +218,6 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     }
 
     ricetta* nuova_ricetta = malloc(sizeof(struct ricetta)); //alloco memoria
-    if (nuova_ricetta == NULL) {
-        fprintf(stderr, "Failed to allocate memory for new recipe.\n");
-        return;
-    }
     strcpy(nuova_ricetta->name, nome_ricetta);
     nuova_ricetta->ingredienti = NULL;
     nuova_ricetta->prev = prev;
@@ -234,12 +229,6 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     ingrediente_ricetta *ultimo_ingrediente = NULL;
     for (int i = 0; token_ingredienti[i] != NULL; i += 2) {
         ingrediente_ricetta *nuovo_ingrediente = malloc(sizeof(ingrediente_ricetta));
-        if (nuovo_ingrediente == NULL) {
-            fprintf(stderr, "Errore: Allocazione della memoria fallita per gli ingredienti\n");
-            // Libera la memoria allocata in precedenza per la ricetta
-            free(nuova_ricetta);
-            return;
-        }
         nuovo_ingrediente->qta = atoi(token_ingredienti[i + 1]);
         nuovo_ingrediente->next = NULL;
         nuova_ricetta->total_qta += nuovo_ingrediente->qta;  // Aggiunge la quantità al totale
@@ -296,10 +285,6 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
 
     // Creazione di un nuovo ordine
     ordini *nuovo_ordine = malloc(sizeof(ordini));
-    if (nuovo_ordine == NULL) {
-        fprintf(stderr, "Errore: Allocazione della memoria fallita per l'ordine\n");
-        return;
-    }
 
     nuovo_ordine->qta = quantita;
     nuovo_ordine->ricetta_ord = ricetta_corrente;
@@ -322,82 +307,49 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
     fwrite_unlocked(accettato, 1, 10, stdout);
 }
 
-void prepara_ordini(const int current_time) { //TODO professore: è rilevante il fatto che devo fare immediatamente la analisi?
+void prepara_ordini(const int current_time) {
     ordini *current_ordine = head_ordine;
     ordini *prev_ordine = NULL;
 
     while (current_ordine != NULL) {
-        if (current_ordine->ricetta_ord == NULL) {
-            printf("FATAL: ricetta_ord pointer is NULL for order placet at time %d.\n", current_ordine->time_placed);
-            return; // Skip processing this order
-        }
-        if ((current_time != -1) && (current_ordine->time_placed > current_time)) {
-            break;  // If current_time is specified and order's time exceeds it, stop processing.
-        }
         ricetta *current_ricetta = current_ordine->ricetta_ord;
         ingrediente_ricetta *ingrediente_ricetta_ptr = current_ricetta->ingredienti;
-
         int can_fulfill = 1;  // Supponiamo di poter soddisfare l'ordine
-
         // Controlla se ci sono abbastanza ingredienti nel magazzino
         while (ingrediente_ricetta_ptr != NULL) {
-
-
             int needed_quantity = (ingrediente_ricetta_ptr->qta) * (current_ordine->qta);
-
-
-
-            magazzino * magazzino_ptr = ingrediente_ricetta_ptr->ingr;
-
-            if (magazzino_ptr->tot_av < needed_quantity) {
+            if (ingrediente_ricetta_ptr->ingr->tot_av < needed_quantity) {
                 can_fulfill = 0;  // Non ci sono abbastanza ingredienti
                 break;
             }
-
             ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
         }
-
         if (can_fulfill) {
-
             // Rimuove gli ingredienti usati dal magazzino
             ingrediente_ricetta_ptr = current_ricetta->ingredienti;
-
             while (ingrediente_ricetta_ptr != NULL) {
                 int needed_quantity = ingrediente_ricetta_ptr->qta * current_ordine->qta;
-
                 // Cerca l'ingrediente nel magazzino
                 magazzino* magazzino_ptr = ingrediente_ricetta_ptr->ingr;
-
                 if (magazzino_ptr != NULL) {
-
                     ingrediente *ingrediente_ptr = magazzino_ptr->ingredienti;
-
                     while ((ingrediente_ptr != NULL) && needed_quantity > 0) {
                         if (ingrediente_ptr->qta <= needed_quantity) {
                             needed_quantity -= ingrediente_ptr->qta;
-
                             // Removing ingredient from list
                             magazzino_ptr->tot_av -= ingrediente_ptr->qta;
                             ingrediente *to_remove = ingrediente_ptr;
                             ingrediente_ptr = ingrediente_ptr->next;
-
                             magazzino_ptr->ingredienti = ingrediente_ptr;
-
-
                             free(to_remove);
                         } else {
                             magazzino_ptr->tot_av -= needed_quantity;
                             ingrediente_ptr->qta -= needed_quantity;
-                            needed_quantity = 0;
-                            //ingrediente_prev = ingrediente_ptr;
-                            //ingrediente_ptr = ingrediente_ptr->next;
                         }
-
                     }
                 }
 
                 ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
-
             }
 
             // Rimuove l'ordine dalla lista ordini
@@ -410,17 +362,11 @@ void prepara_ordini(const int current_time) { //TODO professore: è rilevante il
 
             // Aggiunge l'ordine completato alla lista ordini_completi
             ordini_completi *new_ordine_completo = malloc(sizeof(ordini_completi));
-            if (new_ordine_completo == NULL) {
-                fprintf(stderr, "Errore: Allocazione della memoria fallita per l'ordine completo\n");
-                return;
-            }
 
             new_ordine_completo->ricetta_ord=current_ordine->ricetta_ord;
             new_ordine_completo->qta = current_ordine->qta;
             new_ordine_completo->dim_tot = current_ricetta->total_qta * current_ordine->qta;
             new_ordine_completo->time_placed = current_ordine->time_placed;
-            new_ordine_completo->next = NULL;
-
 
             if ((head_ordine_completi == NULL) || (head_ordine_completi)->time_placed >= new_ordine_completo->time_placed) {
                 new_ordine_completo->next = head_ordine_completi;
@@ -450,7 +396,6 @@ void prepara_ordini(const int current_time) { //TODO professore: è rilevante il
         }
         else {
              prev_ordine = current_ordine;
-            //fprintf(stderr, "%p %p\n", (void *)current_ordine, (void *)current_ordine->next);
             current_ordine = current_ordine->next;
         }
     }
@@ -474,7 +419,6 @@ void rifornisci(char *buffer, const int t) {
         int expiry = atoi(tokens[i + 2]);
 
         magazzino* current = punt_ingrediente(ingr_name);
-        if(current == NULL){fprintf(stderr, "FATAL ERROR - 04"); return;}
 
         // Inserisce i lotti di ingredienti in ordine di scadenza
         ingrediente *ingr_ptr = current->ingredienti, *ingr_prev = NULL;
@@ -492,10 +436,6 @@ void rifornisci(char *buffer, const int t) {
         // Altrimenti, crea un nuovo batch
         else {
             ingrediente *new_ingrediente = malloc(sizeof(ingrediente));
-            if (new_ingrediente == NULL) {
-                fprintf(stderr, "Errore: Allocazione della memoria fallita per l'ingrediente\n");
-                return;
-            }
 
             current->tot_av +=qta;
             new_ingrediente->qta = qta;
@@ -549,9 +489,7 @@ void rimuovi_ricetta(const char* nome_ricetta) {
 
     // Controlla se ci sono ordini presenti
     else if (da_rimuovere->n_ord != 0) {
-        //fprintf(stderr, "Eliminazione ricetta %s, if superato\n", nome_ricetta);
         fwrite_unlocked(ordinisospeso, 1, 18, stdout);
-        //fprintf(stderr, "ordini in sospeso: %s ricetta attuale: %s\n", nome_ricetta, current->name);
         return;
     }
 
@@ -574,7 +512,6 @@ void rimuovi_ricetta(const char* nome_ricetta) {
         free(temp);
     }
     free(da_rimuovere);
-    //fprintf(stderr, "ricetta rimossa: %s\n", nome_ricetta);
     fwrite_unlocked(rimosso, 1, 8, stdout);
 }
 
@@ -593,10 +530,6 @@ void carica_furgone(const int max_cargo, int tempo) {
 
         // Create new in-carico order
         ordini_in_carico *new_in_carico = malloc(sizeof(ordini_in_carico));
-        if (new_in_carico == NULL) {
-            fprintf(stderr, "Memory allocation failed for new in-carico order\n");
-            return; // Early exit on memory allocation failure
-        }
         current->ricetta_ord->n_ord--;
         strcpy(new_in_carico->name, current->ricetta_ord->name);
         new_in_carico->qta = current->qta;
@@ -762,10 +695,6 @@ magazzino* punt_ingrediente(const char* nome_ingr){
     // Se la lista è vuota, creo un ingrediente e lo uso come primo della lista
     if(pointer == NULL) {
         magazzino* nuovo_ingrediente = malloc(sizeof(magazzino));
-                    if (nuovo_ingrediente == NULL) {
-                        fprintf(stderr, "FATAL ERROR - 03");
-                        return NULL;
-                    }
 
         if (head_magazzino == NULL) {
             head_magazzino = nuovo_ingrediente;
@@ -786,10 +715,7 @@ magazzino* punt_ingrediente(const char* nome_ingr){
     // altrimenti lo creo e lo inserisco al posto giusto
     else {
         magazzino* nuovo_ingrediente = malloc(sizeof(magazzino));
-        if (nuovo_ingrediente == NULL) {
-            fprintf(stderr, "FATAL ERROR - 02");
-            return NULL;
-        }
+
         nuovo_ingrediente->next = pointer->next;
         pointer->next = nuovo_ingrediente;
         strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
