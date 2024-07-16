@@ -126,6 +126,7 @@ int main(void)
     int t = 0;
 
     while(1){
+        fprintf(stderr, "%d\n",t);
         verifica_scadenze(t);
 
 
@@ -457,7 +458,7 @@ void rifornisci(char *buffer, const int t) {
 void verifica_scadenze(const int t) { //todo questa funzione andrebbe riscritta per chiarezza
     magazzino *current = head_magazzino;
 
-    while (current) {
+    while (current != NULL) {
         ingrediente **cur = &(current->ingredienti);
         while (*cur) {
             if ((*cur)->expiry <= t) { // todo minore o (minore o uguale) ??
@@ -517,7 +518,6 @@ void rimuovi_ricetta(const char* nome_ricetta) {
 
 void carica_furgone(const int max_cargo, int tempo) {
     ordini_completi *current = head_ordine_completi;
-
     int current_cargo = 0;
     if (current == NULL) {
         printf("camioncino vuoto\n");
@@ -530,6 +530,7 @@ void carica_furgone(const int max_cargo, int tempo) {
 
         // Create new in-carico order
         ordini_in_carico *new_in_carico = malloc(sizeof(ordini_in_carico));
+
         current->ricetta_ord->n_ord--;
         strcpy(new_in_carico->name, current->ricetta_ord->name);
         new_in_carico->qta = current->qta;
@@ -538,7 +539,7 @@ void carica_furgone(const int max_cargo, int tempo) {
         new_in_carico->next = NULL;
 
         // Insert new order into ordini_in_carico, sorted by dim_tot (descending) and then by time_placed (ascending for same dim_tot)
-        if (head_ordine_in_carico == NULL ||
+        if ((head_ordine_in_carico == NULL) ||
             (head_ordine_in_carico)->dim_tot < new_in_carico->dim_tot || // Check for larger dim_tot to be at the front
             ((head_ordine_in_carico)->dim_tot == new_in_carico->dim_tot && (head_ordine_in_carico)->time_placed > new_in_carico->time_placed)) { // Earlier time_placed should come first for the same dim_tot
             // Insert at the head if it's the largest or equally large but earlier
@@ -695,9 +696,12 @@ magazzino* punt_ingrediente(const char* nome_ingr){
     // Se la lista è vuota, creo un ingrediente e lo uso come primo della lista
     if(pointer == NULL) {
         magazzino* nuovo_ingrediente = malloc(sizeof(magazzino));
-            head_magazzino = nuovo_ingrediente;
-            strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
-            nuovo_ingrediente->next = head_magazzino;
+        nuovo_ingrediente->prev = NULL;
+        nuovo_ingrediente->tot_av = 0;
+        nuovo_ingrediente->ingredienti = NULL;
+        head_magazzino = nuovo_ingrediente;
+        strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
+        nuovo_ingrediente->next = NULL;
         ingredienti_totali += 1;
         return nuovo_ingrediente;
     }
@@ -713,6 +717,9 @@ magazzino* punt_ingrediente(const char* nome_ingr){
         pointer->next = nuovo_ingrediente;
         strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
         ingredienti_totali += 1;
+        nuovo_ingrediente->prev = NULL;
+        nuovo_ingrediente->tot_av = 0;
+        nuovo_ingrediente->ingredienti = NULL;
         return nuovo_ingrediente;
     }
 }
