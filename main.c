@@ -472,20 +472,39 @@ void verifica_scadenze(const int t) { //todo questa funzione andrebbe riscritta 
     magazzino *current = head_magazzino;
 
     while (current != NULL) {
+        ingrediente *prev = NULL;
         ingrediente *cur = current->ingredienti;
+
         while (cur != NULL) {
             if (cur->expiry <= t) {
-                current->tot_av -=cur->qta;
+                // Aggiorna la quantità totale disponibile
+                current->tot_av -= cur->qta;
+
+                // Passa al nodo successivo prima di liberare il nodo corrente
                 ingrediente *expired = cur;
                 cur = cur->next;
+
+                // Libera l'ingrediente scaduto e imposta il puntatore a NULL
                 free(expired);
                 expired = NULL;
+
+                // Assicura che il puntatore next del nodo precedente venga aggiornato se non è l'inizio della lista
+                if (prev != NULL) {
+                    prev->next = cur;
+                } else {
+                    // Se siamo all'inizio della lista, aggiorna il puntatore alla testa
+                    current->ingredienti = cur;
+                }
+            } else {
+                // Passa al nodo successivo
+                prev = cur;
+                cur = cur->next;
             }
-            else {break;}
         }
+
+        // Passa al prossimo nodo magazzino
         current = current->next;
     }
-
 }
 
 void rimuovi_ricetta(const char* nome_ricetta) {
