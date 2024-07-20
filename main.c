@@ -2,7 +2,10 @@
 // 2024
 #define MAX_WORD_LENGTH 128
 #define MAX_LINE_LENGTH 32768
+#define CACHE 4
+#define INT_MAX 100000
 
+#include <math.h>
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
@@ -23,6 +26,7 @@ typedef struct magazzino
     int tot_av;
     struct ingrediente *ingredienti;
     struct magazzino *next;
+    int chiamate;
 }magazzino;
 
 typedef struct ingrediente
@@ -44,8 +48,9 @@ typedef struct ricetta
     struct ricetta *prev;
     char name[MAX_WORD_LENGTH];
     struct ingrediente_ricetta* ingredienti; // puntatore agli ingredienti
-    int n_ord; // contatore per numero di ordini attivi sulla ricetta, 0 di default. Serve per l'eliminazione, va incrementato ad ogni ordine e decrementato a ogni consegna
+    int n_ord;
     int total_qta;
+    int chiamate;
     struct ricetta *next;
 } ricetta;
 
@@ -76,6 +81,11 @@ typedef struct ordini_in_carico
     struct ordini_in_carico *next;
 }ordini_in_carico;
 
+typedef struct punt_ricetta {
+    struct ricetta * ricetta_rif;
+    char name[MAX_WORD_LENGTH];
+}punt_ricetta;
+
 void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti);
 void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t);
 void prepara_ordini(const int current_time, ordini* ordine, ordini* extail);
@@ -86,6 +96,9 @@ void carica_furgone(const int max_cargo, int tempo);
 ricetta* ricerca_pseudo_binaria(const char* nome_ricetta);
 magazzino* ricerca_pseudo_binaria_ingr(const char* nome_ingr); //this and the above should be merged somehow
 magazzino* punt_ingrediente(const char* nome_ingr);
+void rimovi_cache_ricetta(const char* nome_ricetta);
+ricetta* cache_ricetta(const char* nome_ricetta);
+
 int read_line_unlocked(char *buffer, int max_size);
 void trim_newline(char *str);
 
@@ -99,9 +112,22 @@ ordini *tail_ordine = NULL;
 magazzino *head_magazzino = NULL;
 ordini_completi *head_ordine_completi = NULL;
 ordini_in_carico *head_ordine_in_carico = NULL;
+punt_ricetta * cache_ricette[CACHE] = {NULL};
+int low_cache = 0;
 
 
 int main(void)
+/*  TODO: attenzione, ogni volta che avviene un ciclo viene chiamata una malloc e allocata a 0. Per efficienza, sarebbe necessario
+ *          e inizializzare la memoria solo quando effettivamente utilizzata.
+ *  TODO: sarebbe utile rimuovere il buffer e leggere l'input token per token
+ *
+ *
+ *
+ *
+ *
+ *
+ */
+
 {
 
     char* buffer = (char*)alloca(MAX_LINE_LENGTH * sizeof(char));
@@ -206,7 +232,7 @@ int main(void)
 
 void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
 
-    ricetta *insert_after = ricerca_pseudo_binaria(nome_ricetta);
+    ricetta *insert_after = cache_ricetta(nome_ricetta);
     ricetta *current = head_ricetta;
     ricetta *prev = NULL;
 
@@ -218,6 +244,7 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     ricetta* nuova_ricetta = malloc(sizeof(struct ricetta)); //alloco memoria
     bzero(nuova_ricetta, sizeof(ricetta));
     strcpy(nuova_ricetta->name, nome_ricetta);
+    nuova_ricetta->chiamate = 1;
     nuova_ricetta->ingredienti = NULL;
     nuova_ricetta->prev = prev;
     nuova_ricetta->next = current;
@@ -275,7 +302,7 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
 void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) {
     ordini* extail = NULL;
     // Ricerca della ricetta nella lista ordinata
-    ricetta *ricetta_corrente = ricerca_pseudo_binaria(nome_ricetta);
+    ricetta *ricetta_corrente = cache_ricetta(nome_ricetta);
 
     // Verifica se la ricetta è stata trovata e corrisponde esattamente
     if ((ricetta_corrente == NULL) || (strcmp(ricetta_corrente->name, nome_ricetta) != 0)) {
@@ -393,12 +420,6 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
                 temp->next = new_ordine_completo;
             }
 
-            if (prev_ordine == NULL) {
-                head_ordine = current_ordine->next;
-            } else {
-                prev_ordine->next = current_ordine->next;
-            }
-
             free(current_ordine);
             if(tail_ordine == current_ordine){tail_ordine = prev_ordine;}
             if (prev_ordine != NULL) {
@@ -430,6 +451,8 @@ void rifornisci(char *buffer, const int t) {
         char *ingr_name = tokens[i];
         int qta = atoi(tokens[i + 1]);
         int expiry = atoi(tokens[i + 2]);
+
+        if(expiry <= t){continue;}
 
         magazzino* current = punt_ingrediente(ingr_name);
 
@@ -510,7 +533,7 @@ void verifica_scadenze(const int t) { //todo questa funzione andrebbe riscritta 
 void rimuovi_ricetta(const char* nome_ricetta) {
 
     // Cerca la ricetta
-    ricetta* da_rimuovere = ricerca_pseudo_binaria(nome_ricetta);
+    ricetta* da_rimuovere = cache_ricetta(nome_ricetta);
     if(da_rimuovere== NULL) {
         fwrite_unlocked(non_presente, 1, 13, stdout);
         return;
@@ -546,6 +569,7 @@ void rimuovi_ricetta(const char* nome_ricetta) {
         free(temp);
     }
     free(da_rimuovere);
+    rimovi_cache_ricetta(nome_ricetta);
     fwrite_unlocked(rimosso, 1, 8, stdout);
 }
 
@@ -784,5 +808,73 @@ magazzino* punt_ingrediente(const char* nome_ingr){
         strcpy(nuovo_ingrediente->ingr_name,nome_ingr);
         ingredienti_totali += 1;
         return nuovo_ingrediente;
+    }
+}
+
+
+ricetta* cache_ricetta(const char* nome_ricetta) {
+    for (int i = 0; i < CACHE; i++) {
+        if (cache_ricette[i] != NULL && strcmp(nome_ricetta, cache_ricette[i]->name) == 0) {
+            cache_ricette[i]->ricetta_rif->chiamate += 1;
+            return cache_ricette[i]->ricetta_rif;
+        }
+    }
+
+    ricetta * temp = ricerca_pseudo_binaria(nome_ricetta);
+    if (temp == NULL || strcmp(temp->name, nome_ricetta) != 0) {
+        return temp;
+    }
+
+    int min_calls = INT_MAX;
+    int min_index = -1;
+    for (int i = 0; i < CACHE; i++) {
+        if (cache_ricette[i] == NULL) {
+            min_index = i;
+            break;
+        }
+        if (cache_ricette[i]->ricetta_rif->chiamate < min_calls) {
+            min_calls = cache_ricette[i]->ricetta_rif->chiamate;
+            min_index = i;
+        }
+    }
+
+    //aggiugno la ricetta in cache
+    if (cache_ricette[min_index] == NULL) {
+        cache_ricette[min_index] = malloc(sizeof(punt_ricetta));
+    }
+    cache_ricette[min_index]->ricetta_rif = temp;
+    strcpy(cache_ricette[min_index]->name, temp->name);
+
+    // aggiorno la variable low_cache
+    low_cache = cache_ricette[0]->ricetta_rif->chiamate;
+    for (int j = 1; j < CACHE; j++) {
+        if (cache_ricette[j] && cache_ricette[j]->ricetta_rif->chiamate < low_cache) {
+            low_cache = cache_ricette[j]->ricetta_rif->chiamate;
+        }
+    }
+
+    temp->chiamate += 1;
+    return temp;
+}
+
+void rimovi_cache_ricetta(const char* nome_ricetta) {
+    for (int i = 0; i < CACHE; i++) {
+        if (cache_ricette[i] != NULL && cache_ricette[i]->ricetta_rif != NULL) {
+            if (strcmp(nome_ricetta, cache_ricette[i]->name) == 0) {
+                free(cache_ricette[i]);
+                cache_ricette[i] = NULL;
+                break;
+            }
+        }
+    }
+
+    // aggiorno la variable low_cache
+    low_cache = 0;
+    for (int j = 0; j < CACHE; j++) {
+        if (cache_ricette[j] != NULL && cache_ricette[j]->ricetta_rif != NULL) {
+            if (low_cache == 0 || cache_ricette[j]->ricetta_rif->chiamate < low_cache) {
+                low_cache = cache_ricette[j]->ricetta_rif->chiamate;
+            }
+        }
     }
 }
