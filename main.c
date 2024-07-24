@@ -3,12 +3,12 @@
 #define MAX_WORD_LENGTH 128
 #define MAX_LINE_LENGTH 32768
 #define CACHE 4
-#define INT_MAX 100000
 
 #include <math.h>
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
+#include<limits.h>
 
 const char *accettato = "accettato\n";
 const char *aggiunto = "aggiunta\n";
@@ -17,6 +17,7 @@ const char *ordinisospeso = "ordini in sospeso\n";
 const char *rimosso = "rimossa\n";
 const char *ignorato = "ignorato\n";
 const char *non_presente = "non presente\n";
+
 
 
 typedef struct magazzino
@@ -103,6 +104,8 @@ int read_line_unlocked(char *buffer, int max_size);
 void trim_newline(char *str);
 
 
+int chiamate = 0;
+int cached = 0;
 
 int ricette_totali = 0;
 int ingredienti_totali = 0;
@@ -121,6 +124,7 @@ int main(void)
  *          e inizializzare la memoria solo quando effettivamente utilizzata.
  *  TODO: sarebbe utile rimuovere il buffer e leggere l'input token per token
  *
+ *  TODO: una lista ordinata che contiene il tempo e i puntatori e serve per gestire le scadenze.
  *
  *
  *
@@ -227,7 +231,7 @@ int main(void)
 
 
     }
-
+    fprintf(stderr, "chiamate %d di cui %d in cache\n", chiamate, cached);
 }
 
 void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
@@ -489,7 +493,7 @@ void rifornisci(char *buffer, const int t) {
         }
     }
     printf("rifornito\n");
-}
+} //todo no printf  
 
 void verifica_scadenze(const int t) { //todo questa funzione andrebbe riscritta per chiarezza
     magazzino *current = head_magazzino;
@@ -498,7 +502,7 @@ void verifica_scadenze(const int t) { //todo questa funzione andrebbe riscritta 
         ingrediente *prev = NULL;
         ingrediente *cur = current->ingredienti;
 
-        while (cur != NULL) {
+        while (cur != NULL) { //todo importante: spostare la funzione dentro
             if (cur->expiry <= t) {
                 // Aggiorna la quantità totale disponibile
                 current->tot_av -= cur->qta;
@@ -813,9 +817,11 @@ magazzino* punt_ingrediente(const char* nome_ingr){
 
 
 ricetta* cache_ricetta(const char* nome_ricetta) {
+    chiamate +=1;
     for (int i = 0; i < CACHE; i++) {
         if (cache_ricette[i] != NULL && strcmp(nome_ricetta, cache_ricette[i]->name) == 0) {
             cache_ricette[i]->ricetta_rif->chiamate += 1;
+            cached +=1;
             return cache_ricette[i]->ricetta_rif;
         }
     }
