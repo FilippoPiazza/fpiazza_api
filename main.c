@@ -71,12 +71,6 @@ typedef struct ordini_in_carico
     struct ordini_in_carico *next;
 }ordini_in_carico;
 
-typedef struct punt_ricetta {
-    struct ricetta * ricetta_rif;
-    char name[MAX_WORD_LENGTH];
-}punt_ricetta;
-
-
 void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti);
 void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t);
 void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* extail);
@@ -85,7 +79,6 @@ void verifica_scadenze(magazzino * current,const int t);
 void carica_furgone(const int max_cargo, int tempo);
 magazzino* punt_ingrediente(const char* nome_ingr);
 void trim_newline(char *str);
-int read_line_unlocked(char *buffer, int max_size);
 ricetta* search_ricetta(const char* nome_ricetta);
 ricetta* insert_ricetta(const char* nome_ricetta);
 void rimuovi_ricetta(const char* nome_ricetta);
@@ -108,13 +101,7 @@ int main(void)
 /*  TODO: attenzione, ogni volta che avviene un ciclo viene chiamata una malloc e allocata a 0. Per efficienza, sarebbe necessario
  *          e inizializzare la memoria solo quando effettivamente utilizzata.
  *  TODO: sarebbe utile rimuovere il buffer e leggere l'input token per token
- *
  *  TODO: una lista ordinata che contiene il tempo e i puntatori e serve per gestire le scadenze.
- *
- *
- *
- *
- *
  */
 
 {
@@ -157,8 +144,6 @@ int main(void)
         if(fgets(buffer, sizeof(buffer), stdin) == NULL){break;}
         trim_newline(buffer);
 
-
-        //trim_newline(buffer);
 
         // se aggiungi_ricetta
         if(buffer[2] == 'g'){
@@ -263,7 +248,6 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     ricette_totali += 1;
     printf("aggiunta\n");
 }
-
 
 void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) {
     ordini* extail = NULL;
@@ -457,8 +441,7 @@ void rifornisci(char *buffer, const int t) {
         }
     }
     printf("rifornito\n");
-} //todo no printf  
-
+}
 
 void verifica_scadenze(magazzino * current,const int t) {
     // Base case: if the current node is NULL, return
@@ -481,8 +464,6 @@ void verifica_scadenze(magazzino * current,const int t) {
     // Process the right subtree recursively
     verifica_scadenze(current->right, t);
 }
-
-
 
 void carica_furgone(const int max_cargo, int tempo) {
     ordini_completi *current = head_ordine_completi;
@@ -560,7 +541,6 @@ void trim_newline(char *str) {
     }
 }
 
-
 ricetta* insert_ricetta(const char* nome_ricetta) {
     // Create a new node
     ricetta* new_node = (ricetta*)malloc(sizeof(ricetta));
@@ -629,7 +609,6 @@ ricetta* search_ricetta(const char* nome_ricetta) {
 
     return NULL;  // Recipe not found
 }
-
 
 void rimuovi_ricetta(const char* nome_ricetta) {
     ricetta* current = head_ricetta;
@@ -710,10 +689,6 @@ void rimuovi_ricetta(const char* nome_ricetta) {
         printf("rimossa\n");
     }
 }
-
-
-
-
 
 magazzino* punt_ingrediente(const char* nome_ingr) {
     magazzino **current = &head_magazzino;  // Double pointer to traverse and modify the tree
