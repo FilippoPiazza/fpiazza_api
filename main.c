@@ -53,15 +53,6 @@ typedef struct ordini
     int time_placed;
 } ordini;
 
-typedef struct ordini_completi
-{
-    int qta;
-    struct ricetta* ricetta_ord;
-    int dim_tot; //dimensione totale ordine, utile per il carico del furgone
-    int time_placed;
-    struct ordini_completi *next;
-}ordini_completi ;
-
 typedef struct ordini_in_carico
 {
     char name[MAX_WORD_LENGTH];
@@ -71,29 +62,30 @@ typedef struct ordini_in_carico
     struct ordini_in_carico *next;
 }ordini_in_carico;
 
+// ricette
 void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti);
-void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t);
-void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* extail);
-void rifornisci(char *buffer, const int t);
-void verifica_scadenze(magazzino * current,const int t);
-void carica_furgone(const int max_cargo, int tempo);
-magazzino* punt_ingrediente(const char* nome_ingr);
-void trim_newline(char *str);
 ricetta* search_ricetta(const char* nome_ricetta);
 ricetta* insert_ricetta(const char* nome_ricetta);
 void rimuovi_ricetta(const char* nome_ricetta);
-
-int read_line_unlocked(char *buffer, int max_size);
+//ordini
+void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t);
+void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* extail);
+void carica_furgone(const int max_cargo, int tempo);
+//ingredienti
+void rifornisci(char *buffer, const int t);
+magazzino* punt_ingrediente(const char* nome_ingr);
+void verifica_scadenze(magazzino * current,const int t);
+//util
 void trim_newline(char *str);
 
 
-int ricette_totali = 0;
+//int ricette_totali = 0;
 int ingredienti_totali = 0;
 ricetta* head_ricetta = NULL;
 ordini *head_ordine = NULL;
 ordini *tail_ordine = NULL;
 magazzino *head_magazzino = NULL;
-ordini_completi *head_ordine_completi = NULL;
+ordini *head_ordine_completi = NULL;
 ordini_in_carico *head_ordine_in_carico = NULL;
 
 
@@ -245,7 +237,6 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     }
 
     // Recipe has been added successfully
-    ricette_totali += 1;
     printf("aggiunta\n");
 }
 
@@ -351,12 +342,11 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
             }
 
             // Aggiunge l'ordine completato alla lista ordini_completi
-            ordini_completi *new_ordine_completo = malloc(sizeof(ordini_completi));
-            bzero(new_ordine_completo, sizeof(ordini_completi));
+            ordini *new_ordine_completo = malloc(sizeof(ordini));
+            bzero(new_ordine_completo, sizeof(ordini));
 
             new_ordine_completo->ricetta_ord = current_ordine->ricetta_ord;
             new_ordine_completo->qta = current_ordine->qta;
-            new_ordine_completo->dim_tot = (current_ricetta->total_qta) * (current_ordine->qta);
             new_ordine_completo->time_placed = current_ordine->time_placed;
             new_ordine_completo->next = NULL;
 
@@ -364,7 +354,7 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
                 new_ordine_completo->next = head_ordine_completi;
                 head_ordine_completi = new_ordine_completo;
             } else {
-                ordini_completi *temp = head_ordine_completi;
+                ordini *temp = head_ordine_completi;
                 while ((temp->next != NULL) && (temp->next->time_placed < new_ordine_completo->time_placed)) {
                     temp = temp->next;
                 }
@@ -466,14 +456,14 @@ void verifica_scadenze(magazzino * current,const int t) {
 }
 
 void carica_furgone(const int max_cargo, int tempo) {
-    ordini_completi *current = head_ordine_completi;
+    ordini *current = head_ordine_completi;
     int current_cargo = 0;
     if (current == NULL) {
         printf("camioncino vuoto\n");
         return;
     }
     while (current != NULL) {
-        if (((current_cargo + current->dim_tot)) > max_cargo) {
+        if (((current_cargo + (current->ricetta_ord->total_qta * current->qta))) > max_cargo) {
             break; // Stop if adding this order exceeds max cargo capacity
         }
 
@@ -484,7 +474,7 @@ void carica_furgone(const int max_cargo, int tempo) {
         current->ricetta_ord->n_ord--;
         strcpy(new_in_carico->name, current->ricetta_ord->name);
         new_in_carico->qta = current->qta;
-        new_in_carico->dim_tot = current->dim_tot;
+        new_in_carico->dim_tot = (current->ricetta_ord->total_qta * current->qta);
         new_in_carico->time_placed = current->time_placed;
         new_in_carico->next = NULL;
 
@@ -515,8 +505,8 @@ void carica_furgone(const int max_cargo, int tempo) {
 
         // stampa dettagli ordini
 
-        current_cargo += current->dim_tot;
-        ordini_completi *to_remove = current;
+        current_cargo += (current->ricetta_ord->total_qta * current->qta);
+        ordini *to_remove = current;
         current = current->next;
         free(to_remove);
     }
