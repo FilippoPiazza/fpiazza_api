@@ -12,24 +12,23 @@
 typedef struct magazzino
 {
     char ingr_name[MAX_WORD_LENGTH];
-    int tot_av;
+    unsigned int tot_av;
     struct ingrediente *ingredienti;
     struct magazzino *left;
     struct magazzino *right;
-    int chiamate;
 }magazzino;
 
 typedef struct ingrediente
 {
-    int qta;
-    int expiry;
+    unsigned int qta;
+    unsigned int expiry;
     struct ingrediente *next;
 }ingrediente ;
 
 typedef struct  ingrediente_ricetta
 {
     magazzino *ingr;
-    int qta;
+    unsigned int qta;
     struct ingrediente_ricetta *next;
 } ingrediente_ricetta;
 
@@ -37,9 +36,8 @@ typedef struct ricetta
 {
     char name[MAX_WORD_LENGTH];
     struct ingrediente_ricetta* ingredienti; // puntatore agli ingredienti
-    int n_ord;
-    int total_qta;
-    int chiamate;
+    unsigned int n_ord;
+    unsigned int total_qta;
     struct ricetta *left;
     struct ricetta *right;
 } ricetta;
@@ -47,18 +45,18 @@ typedef struct ricetta
 
 typedef struct ordini
 {
-    int qta;
+    unsigned int qta;
     struct ricetta* ricetta_ord;
     struct ordini *next;
-    int time_placed;
+    unsigned int time_placed;
 } ordini;
 
 typedef struct ordini_in_carico
 {
     char name[MAX_WORD_LENGTH];
-    int qta;
-    int dim_tot;
-    int time_placed;
+    unsigned int qta;
+    unsigned int dim_tot;
+    unsigned int time_placed;
     struct ordini_in_carico *next;
 }ordini_in_carico;
 
@@ -80,8 +78,8 @@ void trim_newline(char *str);
 
 
 //int ricette_totali = 0;
-int ingredienti_totali = 0;
-ricetta* head_ricetta = NULL;
+
+ricetta *head_ricetta = NULL;
 ordini *head_ordine = NULL;
 ordini *tail_ordine = NULL;
 magazzino *head_magazzino = NULL;
@@ -113,7 +111,7 @@ int main(void)
 
 
     //la variabile t conta il tempo
-    int t = 0;
+    unsigned int t = 0;
 
     while(1){
         verifica_scadenze(head_magazzino, t);
@@ -140,11 +138,9 @@ int main(void)
         // se aggiungi_ricetta
         if(buffer[2] == 'g'){
             char *token = strtok(buffer + 17, " \t\n"); //verifica offset
-            // *token è il nome della ricetta
-            //if (token == NULL) return; \\ nome ricetta assente
 
             char* tokens[MAX_LINE_LENGTH]; // contiene il resto del comando
-            int idx = 0;
+            unsigned int idx = 0;
 
             char *nome_ricetta = token;
             token = strtok(NULL, " \t\n");
@@ -205,7 +201,6 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     nuova_ricetta->ingredienti = NULL;
     nuova_ricetta->n_ord = 0;   // Initialize order count
     nuova_ricetta->total_qta = 0;  // Initialize total quantity
-    nuova_ricetta->chiamate = 1;
 
     // Process the tokenized ingredient list and associate them with the recipe
     ingrediente_ricetta *ultimo_ingrediente = NULL;
@@ -240,6 +235,7 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     printf("aggiunta\n");
 }
 
+//TODO Alberto -> prepara ordine subito non necessario
 void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) {
     ordini* extail = NULL;
     // Ricerca della ricetta nella lista ordinata
@@ -419,7 +415,9 @@ void rifornisci(char *buffer, const int t) {
             current->tot_av +=qta;
             new_ingrediente->qta = qta;
             new_ingrediente->expiry = expiry;
+            new_ingrediente->next = NULL;
 
+            //TODO Alberto -> controlla funzione aggiungiLotto
             if (ingr_prev == NULL) {
                 new_ingrediente->next = current->ingredienti;
                 current->ingredienti = new_ingrediente;
@@ -444,7 +442,7 @@ void verifica_scadenze(magazzino * current,const int t) {
 
     // Process the current node
     ingrediente *cur = current->ingredienti;
-    while (cur && cur->expiry <= t) {
+    while (cur != NULL && cur->expiry <= t) {
         current->tot_av -= cur->qta;
         current->ingredienti = cur->next;
         free(cur);
@@ -455,6 +453,8 @@ void verifica_scadenze(magazzino * current,const int t) {
     verifica_scadenze(current->right, t);
 }
 
+
+//TODO Alberto -> controlla la funzione gestisciCamioncino
 void carica_furgone(const int max_cargo, int tempo) {
     ordini *current = head_ordine_completi;
     int current_cargo = 0;
@@ -540,11 +540,10 @@ ricetta* insert_ricetta(const char* nome_ricetta) {
     }
 
     // Initialize the new node's fields
-    strncpy(new_node->name, nome_ricetta, MAX_WORD_LENGTH);
+    strcpy(new_node->name, nome_ricetta);
     new_node->ingredienti = NULL;
     new_node->n_ord = 0;
     new_node->total_qta = 0;
-    new_node->chiamate = 0;
     new_node->left = NULL;
     new_node->right = NULL;
 
@@ -571,6 +570,7 @@ ricetta* insert_ricetta(const char* nome_ricetta) {
         }
     }
 
+    //TODO Alberto
     // Insert the new node at the correct position
     if (strcmp(nome_ricetta, parent->name) < 0) {
         parent->left = new_node;
@@ -604,6 +604,8 @@ void rimuovi_ricetta(const char* nome_ricetta) {
     ricetta* current = head_ricetta;
     ricetta* parent = NULL;
 
+
+    //TODO Alberto -> sostituire questa parte con search_ingr
     // Search for the node to be deleted
     while (current != NULL && strcmp(current->name, nome_ricetta) != 0) {
         parent = current;
@@ -626,6 +628,7 @@ void rimuovi_ricetta(const char* nome_ricetta) {
         return;
     }
 
+    //TODO Alberto -> questi 3 casi possono essere semplificati?
     // Case 1: Node to be deleted has no children (leaf node)
     if (current->left == NULL && current->right == NULL) {
         if (parent == NULL) {  // Deleting the root node
@@ -656,6 +659,7 @@ void rimuovi_ricetta(const char* nome_ricetta) {
 
     // Case 3: Node to be deleted has two children
     else {
+        printf("rimossa\n");
         ricetta* successor_parent = current;
         ricetta* successor = current->right;
 
@@ -676,7 +680,6 @@ void rimuovi_ricetta(const char* nome_ricetta) {
         }
 
         free(successor);
-        printf("rimossa\n");
     }
 }
 
@@ -706,6 +709,5 @@ magazzino* punt_ingrediente(const char* nome_ingr) {
 
     *current = new_magazzino;  // Insert the new node at the current position
 
-    ingredienti_totali += 1;  // Increase the count of total ingredients
     return new_magazzino;      // Return the pointer to the newly created magazzino
 }
