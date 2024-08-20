@@ -377,42 +377,46 @@ void rifornisci(char *buffer, const int t) {
         int qta = atoi(tokens[i + 1]);
         int expiry = atoi(tokens[i + 2]);
 
-        // Skip if the expiry date is less than or equal to the current time
-        if (expiry <= t) {
-            continue;
-        }
+        if(expiry <= t){continue;}
 
         magazzino* current = punt_ingrediente(ingr_name);
 
-        // Always create a new lotto
-        ingrediente *new_ingrediente = malloc(sizeof(ingrediente));
-        bzero(new_ingrediente, sizeof(ingrediente));
-
-        // Update the total available quantity
-        current->tot_av += qta;
-
-        // Set the new batch's quantity and expiry
-        new_ingrediente->qta = qta;
-        new_ingrediente->expiry = expiry;
-
-        // Insert the new batch into the list in order of expiry
+        // Inserisce i lotti di ingredienti in ordine di scadenza
         ingrediente *ingr_ptr = current->ingredienti, *ingr_prev = NULL;
-        while (ingr_ptr != NULL && ingr_ptr->expiry < expiry) {
+        while ((ingr_ptr != NULL) && (ingr_ptr->expiry < expiry)) {
             ingr_prev = ingr_ptr;
             ingr_ptr = ingr_ptr->next;
         }
 
-        // Insert at the appropriate position
-        new_ingrediente->next = ingr_ptr;
-        if (ingr_prev == NULL) {
-            current->ingredienti = new_ingrediente;
-        } else {
-            ingr_prev->next = new_ingrediente;
+        // Se c'è già un lotto con la stessa scadenza, ne aumenta la quantità
+        if (ingr_ptr != NULL && ingr_ptr->expiry == expiry) {
+
+            current->tot_av +=qta;
+            ingr_ptr->qta += qta;
+        }
+        // Altrimenti, crea un nuovo batch
+        else {
+            ingrediente *new_ingrediente = malloc(sizeof(ingrediente));
+            bzero(new_ingrediente, sizeof(ingrediente));
+
+            current->tot_av +=qta;
+            new_ingrediente->qta = qta;
+            new_ingrediente->expiry = expiry;
+            new_ingrediente->next = NULL;
+
+            //TODO Alberto -> controlla funzione aggiungiLotto
+            if (ingr_prev == NULL) {
+                new_ingrediente->next = current->ingredienti;
+                current->ingredienti = new_ingrediente;
+            }
+            else {
+                new_ingrediente->next = ingr_prev->next;
+                ingr_prev->next = new_ingrediente;
+            }
         }
     }
     printf("rifornito\n");
 }
-
 
 void verifica_scadenze(magazzino * current,const int t) {
     // Base case: if the current node is NULL, return
