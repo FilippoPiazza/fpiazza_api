@@ -51,11 +51,20 @@ typedef struct ordini
     unsigned int time_placed;
 } ordini;
 
+typedef struct ordini_in_carico
+{
+    char name[MAX_WORD_LENGTH];
+    unsigned int qta;
+    unsigned int dim_tot;
+    unsigned int time_placed;
+    struct ordini_in_carico *next;
+}ordini_in_carico;
+
 // ricette
 void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti);
 ricetta* search_ricetta(const char* nome_ricetta);
 ricetta* insert_ricetta(const char* nome_ricetta);
-ricetta* rimuovi_ricetta(ricetta* current, const char* nome_ricetta);
+void rimuovi_ricetta(const char* nome_ricetta);
 //ordini
 void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t);
 void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* extail);
@@ -75,7 +84,7 @@ ordini *head_ordine = NULL;
 ordini *tail_ordine = NULL;
 magazzino *head_magazzino = NULL;
 ordini *head_ordine_completi = NULL;
-ordini *head_ordine_in_carico = NULL;
+ordini_in_carico *head_ordine_in_carico = NULL;
 
 
 int main(void)
@@ -89,6 +98,7 @@ int main(void)
 
     char buffer[MAX_LINE_LENGTH];
 
+    //input iniziale di configurazione del furgone
     if(fgets(buffer, sizeof(buffer), stdin) == NULL){return 69420;}
     char *ptr = buffer;
     int tempocorriere = strtol(ptr, &ptr, 10);
@@ -148,7 +158,7 @@ int main(void)
         // se rimuovi_ricetta
         else if(buffer[2] == 'm'){
             char *token = strtok(buffer + 16, " "); //verifica offset
-            rimuovi_ricetta(head_ricetta, token);
+            rimuovi_ricetta(token);
         }
 
         // se ordine
@@ -271,15 +281,17 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
 
     while (current_ordine != NULL) {
         ricetta *current_ricetta = current_ordine->ricetta_ord;
+        if (current_ricetta == NULL){fprintf(stderr, "current_ricetta is null");}
+        if (current_ricetta->ingredienti == NULL){fprintf(stderr, "current_ricetta->ingredienti is null");}
         ingrediente_ricetta *ingrediente_ricetta_ptr = current_ricetta->ingredienti;
 
-        int can_fulfill = 0;  // Supponiamo di poter soddisfare l'ordine
+        int can_fulfill = 1;  // Supponiamo di poter soddisfare l'ordine
         // Controlla se ci sono abbastanza ingredienti nel magazzino
 
         while (ingrediente_ricetta_ptr != NULL) {
             int needed_quantity = (ingrediente_ricetta_ptr->qta) * (current_ordine->qta);
-            if (ingrediente_ricetta_ptr->ingr->tot_av >= needed_quantity) {
-                can_fulfill = 1;  // Non ci sono abbastanza ingredienti
+            if (ingrediente_ricetta_ptr->ingr->tot_av < needed_quantity) {
+                can_fulfill = 0;  // Non ci sono abbastanza ingredienti
                 break;
             }
             // magazzino * magazzino_ptr = ingrediente_ricetta_ptr->ingr;
@@ -313,6 +325,7 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
                         }
                     }
                 }
+
                 ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
             }
 
@@ -445,75 +458,71 @@ void verifica_scadenze(magazzino * current,const int t) {
 void carica_furgone(const int max_cargo, int tempo) {
     ordini *current = head_ordine_completi;
     int current_cargo = 0;
-
     if (current == NULL) {
         printf("camioncino vuoto\n");
         return;
     }
-
     while (current != NULL) {
-        unsigned int curr_dim_tot = current->ricetta_ord->total_qta * current->qta;
-
-        if ((current_cargo + curr_dim_tot) > max_cargo) {
+        if (((current_cargo + (current->ricetta_ord->total_qta * current->qta))) > max_cargo) {
             break; // Stop if adding this order exceeds max cargo capacity
         }
 
-        // Remove the current node from the head of ordini_completi list
-        head_ordine_completi = current->next;
+        // Create new in-carico order
+        ordini_in_carico *new_in_carico = malloc(sizeof(ordini_in_carico));
+        bzero(new_in_carico, sizeof(ordini_in_carico));
 
-        // Adjust cargo capacity
-        current_cargo += curr_dim_tot;
-
-        // Decrease the number of orders for this recipe
         current->ricetta_ord->n_ord--;
+        strcpy(new_in_carico->name, current->ricetta_ord->name);
+        new_in_carico->qta = current->qta;
+        new_in_carico->dim_tot = (current->ricetta_ord->total_qta * current->qta);
+        new_in_carico->time_placed = current->time_placed;
+        new_in_carico->next = NULL;
 
-        // Insert the current order into the ordini_in_carico list, sorted by dim_tot and time_placed
-        if (head_ordine_in_carico == NULL ||
-            (head_ordine_in_carico->ricetta_ord->total_qta * head_ordine_in_carico->qta < curr_dim_tot) ||
-            (head_ordine_in_carico->ricetta_ord->total_qta * head_ordine_in_carico->qta == curr_dim_tot && head_ordine_in_carico->time_placed > current->time_placed)) {
-
+        // Insert new order into ordini_in_carico, sorted by dim_tot (descending) and then by time_placed (ascending for same dim_tot)
+        if ((head_ordine_in_carico == NULL) ||
+            (head_ordine_in_carico)->dim_tot < new_in_carico->dim_tot || // Check for larger dim_tot to be at the front
+            ((head_ordine_in_carico)->dim_tot == new_in_carico->dim_tot && (head_ordine_in_carico)->time_placed > new_in_carico->time_placed)) { // Earlier time_placed should come first for the same dim_tot
             // Insert at the head if it's the largest or equally large but earlier
-            current->next = head_ordine_in_carico;
-            head_ordine_in_carico = current;
-        } else {
-            // Find the correct position to insert
-            ordini *curr_in_carico = head_ordine_in_carico, *prev_in_carico = NULL;
-
-            while (curr_in_carico != NULL &&
-                   (curr_in_carico->ricetta_ord->total_qta * curr_in_carico->qta > curr_dim_tot ||
-                   (curr_in_carico->ricetta_ord->total_qta * curr_in_carico->qta == curr_dim_tot && curr_in_carico->time_placed < current->time_placed))) {
-
-                prev_in_carico = curr_in_carico;
-                curr_in_carico = curr_in_carico->next;
-            }
-
-            // Insert new item before the first item that has either a smaller dim_tot or the same dim_tot but a later time_placed
-            if (prev_in_carico == NULL) {
-                head_ordine_in_carico = current;  // Set head_ordine_in_carico correctly
+            new_in_carico->next = head_ordine_in_carico;
+            head_ordine_in_carico = new_in_carico;
             } else {
-                prev_in_carico->next = current;
+                // Find the correct position to insert
+                ordini_in_carico *curr_in_carico = head_ordine_in_carico, *prev_in_carico = NULL;
+                while (curr_in_carico != NULL &&
+                       (curr_in_carico->dim_tot > new_in_carico->dim_tot || // Continue if current item is larger
+                       (curr_in_carico->dim_tot == new_in_carico->dim_tot && curr_in_carico->time_placed < new_in_carico->time_placed))) { // Continue if the current time is earlier
+                    prev_in_carico = curr_in_carico;
+                    curr_in_carico = curr_in_carico->next;
+                       }
+                // Insert new item before the first item that has either a smaller dim_tot or the same dim_tot but a later time_placed
+                new_in_carico->next = curr_in_carico;
+                if (prev_in_carico == NULL) {
+                    head_ordine_in_carico = new_in_carico; // This line is corrected to set head_ordine_in_carico correctly
+                } else {
+                    prev_in_carico->next = new_in_carico;
+                }
             }
-            current->next = curr_in_carico;
-        }
 
-        // Move to the next order
-        current = head_ordine_completi;
+        // stampa dettagli ordini
+
+        current_cargo += (current->ricetta_ord->total_qta * current->qta);
+        ordini *to_remove = current;
+        current = current->next;
+        free(to_remove);
     }
 
-    // Print and free the ordini_in_carico list
-    ordini *print_current = head_ordine_in_carico;
+    // Print and free ordini_in_carico list
+
+    ordini_in_carico *print_current = head_ordine_in_carico;
     while (print_current != NULL) {
-        printf("%d %s %d\n", print_current->time_placed, print_current->ricetta_ord->name, print_current->qta);
-        ordini *to_free = print_current;
+        printf("%d %s %d\n", print_current->time_placed, print_current->name, print_current->qta);
+        ordini_in_carico *to_free = print_current;
         print_current = print_current->next;
-        free(to_free); // Free the node after printing
+        free(to_free);
     }
-
-    // Reset head pointers
-    head_ordine_in_carico = NULL;
-    head_ordine_completi = current; // Set head_ordine_completi to the current node (which would be NULL here)
+    head_ordine_in_carico = NULL; // Reset head_in_carico list
+    head_ordine_completi = current;
 }
-
 
 void trim_newline(char *str) {
     int len = strlen(str);
@@ -525,6 +534,10 @@ void trim_newline(char *str) {
 ricetta* insert_ricetta(const char* nome_ricetta) {
     // Create a new node
     ricetta* new_node = (ricetta*)malloc(sizeof(ricetta));
+    if (!new_node) {
+        printf("Memory allocation error\n");
+        return NULL;
+    }
 
     // Initialize the new node's fields
     strcpy(new_node->name, nome_ricetta);
@@ -587,58 +600,68 @@ ricetta* search_ricetta(const char* nome_ricetta) {
     return NULL;  // Recipe not found
 }
 
-void rimuovi_ingredienti(ingrediente_ricetta* ingredienti) {
-    while (ingredienti != NULL) {
-        ingrediente_ricetta* temp = ingredienti;
-        ingredienti = ingredienti->next;  // Move to the next ingredient
-        free(temp);  // Free the current ingredient node
-    }
-}
+void rimuovi_ricetta(const char* nome_ricetta) {
+    ricetta* current = head_ricetta;
+    ricetta* parent = NULL;
 
-ricetta* rimuovi_ricetta(ricetta* current, const char* nome_ricetta) {
+
+    //TODO Alberto -> sostituire questa parte con search_ingr
+    // Search for the node to be deleted
+    while (current != NULL && strcmp(current->name, nome_ricetta) != 0) {
+        parent = current;
+        if (strcmp(nome_ricetta, current->name) < 0) {
+            current = current->left;
+        } else {
+            current = current->right;
+        }
+    }
+
+    // If the recipe was not found, return
     if (current == NULL) {
         printf("non presente\n");
-        return NULL;
+        return;
     }
 
-    // Search for the node to be deleted
-    if (strcmp(nome_ricetta, current->name) < 0) {
-        current->left = rimuovi_ricetta(current->left, nome_ricetta);
-    } else if (strcmp(nome_ricetta, current->name) > 0) {
-        current->right = rimuovi_ricetta(current->right, nome_ricetta);
-    } else {  // Found the node to be deleted
-        // Check if the recipe can be deleted based on n_ord
-        if (current->n_ord != 0) {
-            printf("ordini in sospeso\n");
-            return current;
-        }
+    // Check if the recipe can be deleted based on n_ord
+    if (current->n_ord != 0) {
+        printf("ordini in sospeso\n");
+        return;
+    }
 
-        // Case 1: Node to be deleted has no children (leaf node)
-        if (current->left == NULL && current->right == NULL) {
-            rimuovi_ingredienti(current->ingredienti);  // Free the ingredients
-            free(current);
-            printf("rimossa\n");
-            return NULL;
+    //TODO Alberto -> questi 3 casi possono essere semplificati?
+    // Case 1: Node to be deleted has no children (leaf node)
+    if (current->left == NULL && current->right == NULL) {
+        if (parent == NULL) {  // Deleting the root node
+            head_ricetta = NULL;
+        } else if (parent->left == current) {
+            parent->left = NULL;
+        } else {
+            parent->right = NULL;
         }
+        free(current);
+        printf("rimossa\n");
+    }
 
-        // Case 2: Node to be deleted has one child
-        if (current->left == NULL) {
-            ricetta* temp = current->right;
-            rimuovi_ingredienti(current->ingredienti);  // Free the ingredients
-            free(current);
-            printf("rimossa\n");
-            return temp;
-        } else if (current->right == NULL) {
-            ricetta* temp = current->left;
-            rimuovi_ingredienti(current->ingredienti);  // Free the ingredients
-            free(current);
-            printf("rimossa\n");
-            return temp;
+    // Case 2: Node to be deleted has one child
+    else if (current->left == NULL || current->right == NULL) {
+        ricetta* child = (current->left != NULL) ? current->left : current->right;
+
+        if (parent == NULL) {  // Deleting the root node
+            head_ricetta = child;
+        } else if (parent->left == current) {
+            parent->left = child;
+        } else {
+            parent->right = child;
         }
+        free(current);
+        printf("rimossa\n");
+    }
 
-        // Case 3: Node to be deleted has two children
-        ricetta* successor = current->right;
+    // Case 3: Node to be deleted has two children
+    else {
+        printf("rimossa\n");
         ricetta* successor_parent = current;
+        ricetta* successor = current->right;
 
         // Find the in-order successor (smallest value in the right subtree)
         while (successor->left != NULL) {
@@ -646,42 +669,19 @@ ricetta* rimuovi_ricetta(ricetta* current, const char* nome_ricetta) {
             successor = successor->left;
         }
 
-        // Copy successor's data to current node
+        // Replace current node's data with the successor's data
         strncpy(current->name, successor->name, MAX_WORD_LENGTH);
-        current->n_ord = successor->n_ord;
-        current->total_qta = successor->total_qta;
 
-        // Copy the ingredients from the successor to the current node
-        rimuovi_ingredienti(current->ingredienti);  // Free current node's ingredients
-        current->ingredienti = NULL;  // Reset ingredients
-
-        // Deep copy the ingredients linked list from successor to current
-        ingrediente_ricetta* source = successor->ingredienti;
-        ingrediente_ricetta** dest = &(current->ingredienti);  // Pointer to the current's ingredient pointer
-        while (source != NULL) {
-            *dest = malloc(sizeof(ingrediente_ricetta));  // Allocate new node for each ingredient
-            if (*dest == NULL) {
-                printf("Errore di allocazione memoria\n");
-                return current;
-            }
-            // Copy ingredient data
-            **dest = *source;  // Shallow copy the fields (e.g., quantities, names)
-            (*dest)->next = NULL;  // Ensure the new node's next is NULL
-            source = source->next;  // Move to the next ingredient in the successor's list
-            dest = &((*dest)->next);  // Move to the next node in the current's list
-        }
-
-        // Recursively delete the successor node
+        // Fix the parent of the successor
         if (successor_parent->left == successor) {
-            successor_parent->left = rimuovi_ricetta(successor_parent->left, successor->name);
+            successor_parent->left = successor->right;
         } else {
-            successor_parent->right = rimuovi_ricetta(successor_parent->right, successor->name);
+            successor_parent->right = successor->right;
         }
+
+        free(successor);
     }
-
-    return current;
 }
-
 
 magazzino* punt_ingrediente(const char* nome_ingr) {
     magazzino **current = &head_magazzino;  // Double pointer to traverse and modify the tree
