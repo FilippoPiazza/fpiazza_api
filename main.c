@@ -119,19 +119,15 @@ int main(void)
 
 {
 
-    char* buffer = (char*)alloca(MAX_LINE_LENGTH * sizeof(char));
-    if (buffer == NULL) {
-        perror("Failed to allocate buffer");
-        return EXIT_FAILURE;
-    }
+    char buffer[MAX_LINE_LENGTH];
 
     //input iniziale di configurazione del furgone
-    if(read_line_unlocked(buffer, MAX_LINE_LENGTH) == 0){return 69420;}
+    if(fgets(buffer, sizeof(buffer), stdin) == NULL){return 69420;}
     char *ptr = buffer;
-    const int tempocorriere = strtol(ptr, &ptr, 10);
-    const int max_cargo = strtol(ptr, &ptr, 10);
+    int tempocorriere = strtol(ptr, &ptr, 10);
+    int max_cargo = strtol(ptr, &ptr, 10);
     //printf("%d%d\n", max_cargo, tempocorriere);
-    memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
+    memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
 
     //la variabile cd_corriere funziona da countdown
     int cd_corriere = tempocorriere;
@@ -158,10 +154,11 @@ int main(void)
             rifornimento
         */
 
-        if(read_line_unlocked(buffer, MAX_LINE_LENGTH) == 0){break;}
-
-
+        if(fgets(buffer, sizeof(buffer), stdin) == NULL){break;}
         trim_newline(buffer);
+
+
+        //trim_newline(buffer);
 
         // se aggiungi_ricetta
         if(buffer[2] == 'g'){
@@ -563,22 +560,6 @@ void trim_newline(char *str) {
     }
 }
 
-int read_line_unlocked(char *buffer, int max_size) {
-    int act_max_size = max_size*sizeof(char);
-    int i = 0;
-    char ch;
-    while (1) {
-        if((ch = getchar_unlocked()) == EOF){break;}
-        if((ch == '\n')){break;}
-        if((i >= act_max_size-1)){break;}
-        buffer[i] = ch;
-        i+=1;
-    }
-
-    buffer[i] = '\0'; // Null-terminate the string
-
-    return i; // Return the number of characters read, not including the null terminator
-}
 
 ricetta* insert_ricetta(const char* nome_ricetta) {
     // Create a new node
