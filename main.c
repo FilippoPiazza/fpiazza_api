@@ -1,7 +1,11 @@
 // Filippo Piazza
 // 2024
-#define MAX_WORD_LENGTH 32
+#define MAX_WORD_LENGTH 128
 #define MAX_LINE_LENGTH 16384
+
+//#define MAX_WORD_LENGTH 21
+//#define MAX_LINE_LENGTH 1024
+
 
 #include <math.h>
 #include<stdio.h>
@@ -13,6 +17,7 @@ typedef struct magazzino
 {
     char ingr_name[MAX_WORD_LENGTH];
     unsigned int tot_av;
+    unsigned int booked;
     struct ingrediente *ingredienti;
     struct magazzino *left;
     struct magazzino *right;
@@ -75,6 +80,7 @@ magazzino* punt_ingrediente(const char* nome_ingr);
 void verifica_scadenze(magazzino * current,const int t);
 //util
 void trim_newline(char *str);
+int read_line_unlocked(char *buffer, int max_size);
 
 
 //int ricette_totali = 0;
@@ -88,23 +94,20 @@ ordini_in_carico *head_ordine_in_carico = NULL;
 
 int main(void)
 /*
- *  TODO: sarebbe utile rimuovere il buffer e leggere l'input token per token
  *  TODO: una lista ordinata che contiene il tempo e i puntatori e serve per gestire le scadenze.
- *  TODO: int hash negli alberi
- *  TODO: rimuovi ordini in carico per risparmiare tempo
  */
 
 {
 
-    char buffer[MAX_LINE_LENGTH];
+    char* buffer = (char*)alloca(MAX_LINE_LENGTH * sizeof(char));
 
     //input iniziale di configurazione del furgone
-    if(fgets(buffer, sizeof(buffer), stdin) == NULL){return 69420;}
+    if(read_line_unlocked(buffer, MAX_LINE_LENGTH) == 0){return 69420;}
     char *ptr = buffer;
     int tempocorriere = strtol(ptr, &ptr, 10);
     int max_cargo = strtol(ptr, &ptr, 10);
     //printf("%d%d\n", max_cargo, tempocorriere);
-    memset(buffer, 0, sizeof(buffer)); // pulisce il buffer
+    memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
 
     //la variabile cd_corriere funziona da countdown
     int cd_corriere = tempocorriere;
@@ -131,9 +134,8 @@ int main(void)
             rifornimento
         */
 
-        if(fgets(buffer, sizeof(buffer), stdin) == NULL){break;}
+        if(read_line_unlocked(buffer, MAX_LINE_LENGTH) == 0){break;}
         trim_newline(buffer);
-
 
         // se aggiungi_ricetta
         if(buffer[2] == 'g'){
@@ -175,10 +177,8 @@ int main(void)
             prepara_ordini(-1, NULL, NULL);
         }
 
-         // verifica
-        //prepara_ordini(-1, NULL, NULL);
         t += 1;
-        memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
+        //memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
 
 
     }
@@ -213,8 +213,10 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
         // Link the recipe to the warehouse ingredient
         magazzino *ingrediente_magazzino = punt_ingrediente(token_ingredienti[i]);
 
+
         // Associate the ingredient in the warehouse with the recipe
         nuovo_ingrediente_ricetta->ingr = ingrediente_magazzino;
+
 
         // Chain the ingredients together in the recipe
         nuovo_ingrediente_ricetta->next = NULL;
@@ -330,30 +332,21 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
                 prev_ordine->next = current_ordine->next;
             }
 
-            // Aggiunge l'ordine completato alla lista ordini_completi
-            ordini *new_ordine_completo = malloc(sizeof(ordini));
-            //bzero(new_ordine_completo, sizeof(ordini));
-            //todo importante alberto basta spostare l'ordine, non serve sto casino
-            new_ordine_completo->ricetta_ord = current_ordine->ricetta_ord;
-            new_ordine_completo->qta = current_ordine->qta;
-            new_ordine_completo->time_placed = current_ordine->time_placed;
-            new_ordine_completo->next = NULL;
+            current_ordine->next = NULL;
 
-            //printf("L'ordine %d è stato completato\n", current_ordine->time_placed);
 
-            if ((head_ordine_completi == NULL) || ((head_ordine_completi)->time_placed >= new_ordine_completo->time_placed)) {
-                new_ordine_completo->next = head_ordine_completi;
-                head_ordine_completi = new_ordine_completo;
+            if (head_ordine_completi == NULL || head_ordine_completi->time_placed >= current_ordine->time_placed) {
+                current_ordine->next = head_ordine_completi;
+                head_ordine_completi = current_ordine;
             } else {
                 ordini *temp = head_ordine_completi;
-                while ((temp->next != NULL) && (temp->next->time_placed < new_ordine_completo->time_placed)) {
+                while (temp->next != NULL && temp->next->time_placed < current_ordine->time_placed) {
                     temp = temp->next;
                 }
-                new_ordine_completo->next = temp->next;
-                temp->next = new_ordine_completo;
+                current_ordine->next = temp->next;
+                temp->next = current_ordine;
             }
 
-            free(current_ordine);
             if(tail_ordine == current_ordine){tail_ordine = prev_ordine;}
             if (prev_ordine != NULL) {
                 current_ordine = prev_ordine->next; // Move to the next order if there is a previous order
@@ -412,7 +405,7 @@ void rifornisci(char *buffer, const int t) {
             new_ingrediente->expiry = expiry;
             new_ingrediente->next = NULL;
 
-            //TODO Alberto -> controlla funzione aggiungiLotto
+
             if (ingr_prev == NULL) {
                 new_ingrediente->next = current->ingredienti;
                 current->ingredienti = new_ingrediente;
@@ -432,10 +425,12 @@ void verifica_scadenze(magazzino * current,const int t) {
         return;
     }
 
-    // Process the left subtree recursively
     verifica_scadenze(current->left, t);
 
-    // Process the current node
+
+
+    // Process the current nod
+
     ingrediente *cur = current->ingredienti;
     while (cur != NULL && cur->expiry <= t) {
         current->tot_av -= cur->qta;
@@ -444,12 +439,11 @@ void verifica_scadenze(magazzino * current,const int t) {
         cur = current->ingredienti; // Move to the next ingredient
     }
 
-    // Process the right subtree recursively
     verifica_scadenze(current->right, t);
+
 }
 
 
-//TODO Alberto -> controlla la funzione gestisciCamioncino
 void carica_furgone(const int max_cargo, int tempo) {
     ordini *current = head_ordine_completi;
     int current_cargo = 0;
@@ -560,8 +554,6 @@ ricetta* insert_ricetta(const char* nome_ricetta) {
         }
     }
 
-    //TODO Alberto
-    // Insert the new node at the correct position
     if (strcmp(nome_ricetta, parent->name) < 0) {
         parent->left = new_node;
     } else {
@@ -614,6 +606,11 @@ void rimuovi_ricetta(const char* nome_ricetta) {
     if (current->n_ord != 0) {
         printf("ordini in sospeso\n");
         return;
+    }
+
+    ingrediente_ricetta* ingr = current->ingredienti;
+    while (ingr != NULL) {
+        ingr = ingr->next;
     }
 
     // Node to be deleted has two children
@@ -694,4 +691,21 @@ magazzino* punt_ingrediente(const char* nome_ingr) {
     *current = new_magazzino;  // Insert the new node at the current position
 
     return new_magazzino;      // Return the pointer to the newly created magazzino
+}
+
+int read_line_unlocked(char *buffer, int max_size) {
+    //int act_max_size = max_size*sizeof(char);
+    int i = 0;
+    char ch;
+    while (1) {
+        if((ch = getchar_unlocked()) == EOF){break;}
+        if((ch == '\n')){break;}
+        //if((i >= act_max_size-1)){break;}
+        buffer[i] = ch;
+        i+=1;
+    }
+
+    buffer[i] = '\0'; // Null-terminate the string
+
+    return i; // Return the number of characters read, not including the null terminator
 }
