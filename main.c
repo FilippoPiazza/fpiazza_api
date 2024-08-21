@@ -86,12 +86,14 @@ magazzino *head_magazzino = NULL;
 ordini *head_ordine_completi = NULL;
 ordini_in_carico *head_ordine_in_carico = NULL;
 
-
 int main(void)
 /*  TODO: attenzione, ogni volta che avviene un ciclo viene chiamata una malloc e allocata a 0. Per efficienza, sarebbe necessario
  *          e inizializzare la memoria solo quando effettivamente utilizzata.
  *  TODO: sarebbe utile rimuovere il buffer e leggere l'input token per token
  *  TODO: una lista ordinata che contiene il tempo e i puntatori e serve per gestire le scadenze.
+ *  TODO: int hash negli alberi
+ *  TODO: riduci bzero
+ *  TODO: rimuovi ordini in carico per risparmiare tempo
  */
 
 {
@@ -340,11 +342,13 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
             // Aggiunge l'ordine completato alla lista ordini_completi
             ordini *new_ordine_completo = malloc(sizeof(ordini));
             bzero(new_ordine_completo, sizeof(ordini));
-
+            //todo importante alberto basta spostare l'ordine, non serve sto casino
             new_ordine_completo->ricetta_ord = current_ordine->ricetta_ord;
             new_ordine_completo->qta = current_ordine->qta;
             new_ordine_completo->time_placed = current_ordine->time_placed;
             new_ordine_completo->next = NULL;
+
+            //printf("L'ordine %d è stato completato\n", current_ordine->time_placed);
 
             if ((head_ordine_completi == NULL) || ((head_ordine_completi)->time_placed >= new_ordine_completo->time_placed)) {
                 new_ordine_completo->next = head_ordine_completi;
@@ -503,7 +507,6 @@ void carica_furgone(const int max_cargo, int tempo) {
                 }
             }
 
-        // stampa dettagli ordini
 
         current_cargo += (current->ricetta_ord->total_qta * current->qta);
         ordini *to_remove = current;
@@ -604,8 +607,6 @@ void rimuovi_ricetta(const char* nome_ricetta) {
     ricetta* current = head_ricetta;
     ricetta* parent = NULL;
 
-
-    //TODO Alberto -> sostituire questa parte con search_ingr
     // Search for the node to be deleted
     while (current != NULL && strcmp(current->name, nome_ricetta) != 0) {
         parent = current;
@@ -628,60 +629,59 @@ void rimuovi_ricetta(const char* nome_ricetta) {
         return;
     }
 
-    //TODO Alberto -> questi 3 casi possono essere semplificati?
-    // Case 1: Node to be deleted has no children (leaf node)
-    if (current->left == NULL && current->right == NULL) {
-        if (parent == NULL) {  // Deleting the root node
-            head_ricetta = NULL;
-        } else if (parent->left == current) {
-            parent->left = NULL;
-        } else {
-            parent->right = NULL;
-        }
-        free(current);
-        printf("rimossa\n");
-    }
-
-    // Case 2: Node to be deleted has one child
-    else if (current->left == NULL || current->right == NULL) {
-        ricetta* child = (current->left != NULL) ? current->left : current->right;
-
-        if (parent == NULL) {  // Deleting the root node
-            head_ricetta = child;
-        } else if (parent->left == current) {
-            parent->left = child;
-        } else {
-            parent->right = child;
-        }
-        free(current);
-        printf("rimossa\n");
-    }
-
-    // Case 3: Node to be deleted has two children
-    else {
-        printf("rimossa\n");
+    // Node to be deleted has two children
+    if (current->left != NULL && current->right != NULL) {
+        // Find the in-order successor (smallest node in the right subtree)
         ricetta* successor_parent = current;
         ricetta* successor = current->right;
-
-        // Find the in-order successor (smallest value in the right subtree)
         while (successor->left != NULL) {
             successor_parent = successor;
             successor = successor->left;
         }
 
-        // Replace current node's data with the successor's data
-        strncpy(current->name, successor->name, MAX_WORD_LENGTH);
-
-        // Fix the parent of the successor
-        if (successor_parent->left == successor) {
+        // Move successor data into current node (no copying)
+        if (successor_parent != current) {
             successor_parent->left = successor->right;
         } else {
             successor_parent->right = successor->right;
         }
 
-        free(successor);
+        // Move successor node into the position of the current node
+        if (parent == NULL) {  // Deleting the root node
+            head_ricetta = successor;
+        } else if (parent->left == current) {
+            parent->left = successor;
+        } else {
+            parent->right = successor;
+        }
+
+        // Connect left child of current to successor's left
+        successor->left = current->left;
+
+        if (successor != current->right) {
+            successor->right = current->right;
+        }
+
+        free(current);
+        printf("rimossa\n");
+        return;
     }
+
+    // Node to be deleted has at most one child
+    ricetta* child = (current->left != NULL) ? current->left : current->right;
+
+    if (parent == NULL) {  // Deleting the root node
+        head_ricetta = child;
+    } else if (parent->left == current) {
+        parent->left = child;
+    } else {
+        parent->right = child;
+    }
+
+    free(current);
+    printf("rimossa\n");
 }
+
 
 magazzino* punt_ingrediente(const char* nome_ingr) {
     magazzino **current = &head_magazzino;  // Double pointer to traverse and modify the tree
