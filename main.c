@@ -1,7 +1,7 @@
 // Filippo Piazza
 // 2024
-#define MAX_WORD_LENGTH 128
-#define MAX_LINE_LENGTH 32768
+#define MAX_WORD_LENGTH 32
+#define MAX_LINE_LENGTH 16384
 
 #include <math.h>
 #include<stdio.h>
@@ -87,12 +87,10 @@ ordini *head_ordine_completi = NULL;
 ordini_in_carico *head_ordine_in_carico = NULL;
 
 int main(void)
-/*  TODO: attenzione, ogni volta che avviene un ciclo viene chiamata una malloc e allocata a 0. Per efficienza, sarebbe necessario
- *          e inizializzare la memoria solo quando effettivamente utilizzata.
+/*
  *  TODO: sarebbe utile rimuovere il buffer e leggere l'input token per token
  *  TODO: una lista ordinata che contiene il tempo e i puntatori e serve per gestire le scadenze.
  *  TODO: int hash negli alberi
- *  TODO: riduci bzero
  *  TODO: rimuovi ordini in carico per risparmiare tempo
  */
 
@@ -167,10 +165,6 @@ int main(void)
         else if(buffer[2] == 'd'){
             char *nome_ricetta = strtok(buffer + 7, " "); //verifica offset
             char *qta_str = strtok(NULL, " \t\n");
-            if (nome_ricetta == NULL || qta_str == NULL) {
-                printf("Input non valido\n");
-                continue;
-            }
             int quantita = atoi(qta_str);
             aggiungi_ordine(nome_ricetta, quantita, t);
         }
@@ -210,7 +204,7 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     for (int i = 0; token_ingredienti[i] != NULL; i += 2) {
         // Allocate a new ingredient in the recipe
         ingrediente_ricetta *nuovo_ingrediente_ricetta = malloc(sizeof(ingrediente_ricetta));
-        bzero(nuovo_ingrediente_ricetta, sizeof(ingrediente_ricetta));
+        //bzero(nuovo_ingrediente_ricetta, sizeof(ingrediente_ricetta));
 
         // Get the quantity for the ingredient
         nuovo_ingrediente_ricetta->qta = atoi(token_ingredienti[i + 1]);
@@ -237,7 +231,6 @@ void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
     printf("aggiunta\n");
 }
 
-//TODO Alberto -> prepara ordine subito non necessario
 void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) {
     ordini* extail = NULL;
     // Ricerca della ricetta nella lista ordinata
@@ -251,7 +244,7 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
 
     // Creazione di un nuovo ordine
     ordini *nuovo_ordine = malloc(sizeof(ordini));
-    bzero(nuovo_ordine, sizeof(ordini));
+    //bzero(nuovo_ordine, sizeof(ordini));
 
     nuovo_ordine->qta = quantita;
     nuovo_ordine->ricetta_ord = ricetta_corrente;
@@ -283,8 +276,6 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
 
     while (current_ordine != NULL) {
         ricetta *current_ricetta = current_ordine->ricetta_ord;
-        if (current_ricetta == NULL){fprintf(stderr, "current_ricetta is null");}
-        if (current_ricetta->ingredienti == NULL){fprintf(stderr, "current_ricetta->ingredienti is null");}
         ingrediente_ricetta *ingrediente_ricetta_ptr = current_ricetta->ingredienti;
 
         int can_fulfill = 1;  // Supponiamo di poter soddisfare l'ordine
@@ -341,7 +332,7 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
 
             // Aggiunge l'ordine completato alla lista ordini_completi
             ordini *new_ordine_completo = malloc(sizeof(ordini));
-            bzero(new_ordine_completo, sizeof(ordini));
+            //bzero(new_ordine_completo, sizeof(ordini));
             //todo importante alberto basta spostare l'ordine, non serve sto casino
             new_ordine_completo->ricetta_ord = current_ordine->ricetta_ord;
             new_ordine_completo->qta = current_ordine->qta;
@@ -414,7 +405,7 @@ void rifornisci(char *buffer, const int t) {
         // Altrimenti, crea un nuovo batch
         else {
             ingrediente *new_ingrediente = malloc(sizeof(ingrediente));
-            bzero(new_ingrediente, sizeof(ingrediente));
+            //bzero(new_ingrediente, sizeof(ingrediente));
 
             current->tot_av +=qta;
             new_ingrediente->qta = qta;
@@ -473,7 +464,7 @@ void carica_furgone(const int max_cargo, int tempo) {
 
         // Create new in-carico order
         ordini_in_carico *new_in_carico = malloc(sizeof(ordini_in_carico));
-        bzero(new_in_carico, sizeof(ordini_in_carico));
+        //bzero(new_in_carico, sizeof(ordini_in_carico));
 
         current->ricetta_ord->n_ord--;
         strcpy(new_in_carico->name, current->ricetta_ord->name);
@@ -537,10 +528,6 @@ void trim_newline(char *str) {
 ricetta* insert_ricetta(const char* nome_ricetta) {
     // Create a new node
     ricetta* new_node = (ricetta*)malloc(sizeof(ricetta));
-    if (!new_node) {
-        printf("Memory allocation error\n");
-        return NULL;
-    }
 
     // Initialize the new node's fields
     strcpy(new_node->name, nome_ricetta);
@@ -700,12 +687,9 @@ magazzino* punt_ingrediente(const char* nome_ingr) {
 
     // If we reach here, the ingredient does not exist, so we create it and insert it into the tree
     magazzino *new_magazzino = malloc(sizeof(magazzino));
-    if (new_magazzino == NULL) {
-        perror("Memory allocation error");
-        exit(EXIT_FAILURE);
-    }
     bzero(new_magazzino, sizeof(magazzino));  // Initialize the new magazzino to zero
     strcpy(new_magazzino->ingr_name, nome_ingr);
+
 
     *current = new_magazzino;  // Insert the new node at the current position
 
