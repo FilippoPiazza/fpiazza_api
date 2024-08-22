@@ -65,11 +65,6 @@ typedef struct ordini_in_carico
     struct ordini_in_carico *next;
 }ordini_in_carico;
 
-typedef struct bookings {
-    magazzino *ingr;
-    struct bookings *next;
-}bookings;
-
 // ricette
 void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti);
 ricetta* search_ricetta(const char* nome_ricetta);
@@ -83,7 +78,6 @@ void carica_furgone(const int max_cargo, int tempo);
 void rifornisci(char *buffer, const int t);
 magazzino* punt_ingrediente(const char* nome_ingr);
 void verifica_scadenze(magazzino * current,const int t);
-void clear_booked(magazzino * current, int flag);
 //util
 void trim_newline(char *str);
 int read_line_unlocked(char *buffer, int max_size);
@@ -97,7 +91,6 @@ ordini *tail_ordine = NULL;
 magazzino *head_magazzino = NULL;
 ordini *head_ordine_completi = NULL;
 ordini_in_carico *head_ordine_in_carico = NULL;
-bookings *head_bookings = NULL;
 
 int main(void)
 /*
@@ -281,53 +274,67 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
 void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* extail) {
     ordini *current_ordine = head_ordine;
     ordini *prev_ordine = NULL;
-    int flag = (ordine_ingresso == tail_ordine);
     if(ordine_ingresso != NULL){current_ordine = ordine_ingresso; prev_ordine = extail;}
 
     while (current_ordine != NULL) {
         ricetta *current_ricetta = current_ordine->ricetta_ord;
         ingrediente_ricetta *ingrediente_ricetta_ptr = current_ricetta->ingredienti;
 
-        int can_fulfill = 1;  // Assume we can fulfill the order
+        int can_fulfill = 1;  // Supponiamo di poter soddisfare l'ordine
+        // Controlla se ci sono abbastanza ingredienti nel magazzino
 
-        // Check if there are enough ingredients in the warehouse
         while (ingrediente_ricetta_ptr != NULL) {
             int needed_quantity = (ingrediente_ricetta_ptr->qta) * (current_ordine->qta);
-            if (ingrediente_ricetta_ptr->ingr->tot_av - ingrediente_ricetta_ptr->ingr->booked < needed_quantity) {
-                can_fulfill = 0;  // Not enough ingredients
+            if (ingrediente_ricetta_ptr->ingr->tot_av < needed_quantity) {
+                can_fulfill = 0;  // Non ci sono abbastanza ingredienti
                 break;
             }
+            // magazzino * magazzino_ptr = ingrediente_ricetta_ptr->ingr;
             ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
         }
 
         if (can_fulfill) {
-            // Deduct the ingredients used from the warehouse and add them to the bookings list
+
+            // Rimuove gli ingredienti usati dal magazzino
             ingrediente_ricetta_ptr = current_ricetta->ingredienti;
 
             while (ingrediente_ricetta_ptr != NULL) {
                 int needed_quantity = (ingrediente_ricetta_ptr->qta) * (current_ordine->qta);
+                // Cerca l'ingrediente nel magazzino
                 magazzino* magazzino_ptr = ingrediente_ricetta_ptr->ingr;
                 if (magazzino_ptr != NULL) {
-                    magazzino_ptr->booked += needed_quantity;
-                    // Add to bookings list if not already present
-                    bookings *new_booking = malloc(sizeof(bookings));
-                    new_booking->ingr = magazzino_ptr;
-                    new_booking->next = head_bookings;
-                    head_bookings = new_booking;
+                    ingrediente* ingrediente_ptr = magazzino_ptr->ingredienti;
+                    while ((ingrediente_ptr != NULL) && (needed_quantity > 0)) {
+                        if (ingrediente_ptr->qta <= needed_quantity) {
+                            needed_quantity -= ingrediente_ptr->qta;
+                            // Removing ingredient from list
+                            magazzino_ptr->tot_av -= ingrediente_ptr->qta;
+                            ingrediente *to_remove = ingrediente_ptr;
+                            ingrediente_ptr = ingrediente_ptr->next;
+                            magazzino_ptr->ingredienti = ingrediente_ptr;
+                            free(to_remove);
+                        } else {
+                            magazzino_ptr->tot_av -= needed_quantity;
+                            ingrediente_ptr->qta -= needed_quantity;
+                            needed_quantity = 0;
+                        }
+                    }
                 }
+
                 ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
             }
 
-            // Remove the fulfilled order from the order list
+            // Rimuove l'ordine dalla lista ordini
             if (prev_ordine == NULL) {
                 head_ordine = current_ordine->next;
+
             } else {
                 prev_ordine->next = current_ordine->next;
             }
 
             current_ordine->next = NULL;
 
-            // Insert the fulfilled order into the completed order list
+
             if (head_ordine_completi == NULL || head_ordine_completi->time_placed >= current_ordine->time_placed) {
                 current_ordine->next = head_ordine_completi;
                 head_ordine_completi = current_ordine;
@@ -340,90 +347,19 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
                 temp->next = current_ordine;
             }
 
-            // Adjust the tail_ordine if necessary
-            if (tail_ordine == current_ordine) {
-                tail_ordine = prev_ordine;
+            if(tail_ordine == current_ordine){tail_ordine = prev_ordine;}
+            if (prev_ordine != NULL) {
+                current_ordine = prev_ordine->next; // Move to the next order if there is a previous order
+            } else {
+                current_ordine = head_ordine; // If there was no previous order, start from the head again
             }
-
-            current_ordine = (prev_ordine != NULL) ? prev_ordine->next : head_ordine;
-        } else {
-            prev_ordine = current_ordine;
+        }
+        else {
+             prev_ordine = current_ordine;
             current_ordine = current_ordine->next;
         }
     }
-
-    // Clear the bookings list after processing
-    clear_booked(NULL, flag);
 }
-
-
-void clear_booked(magazzino *current, int flag) {
-    bookings *current_booking = head_bookings;
-
-    // Traverse the bookings list instead of the entire warehouse
-    while (current_booking != NULL) {
-        magazzino *current_ingredient = current_booking->ingr;
-        ingrediente *curr_lot = current_ingredient->ingredienti;
-
-        while (current_ingredient->booked > 0) {
-            if (curr_lot->qta <= current_ingredient->booked) {
-                current_ingredient->booked -= curr_lot->qta;
-                current_ingredient->tot_av -= curr_lot->qta;
-
-                // Remove ingredient lot
-                ingrediente *to_remove = curr_lot;
-                curr_lot = curr_lot->next;
-                current_ingredient->ingredienti = curr_lot;
-
-                free(to_remove);
-            } else {
-                current_ingredient->tot_av -= current_ingredient->booked;
-                curr_lot->qta -= current_ingredient->booked;
-                current_ingredient->booked = 0;
-            }
-        }
-
-        // Move to the next booking in the list
-        current_booking = current_booking->next;
-    }
-
-    // If the flag is set, clear specific bookings related to the tail order
-    if (flag) {
-        ingrediente_ricetta *current_ingrediente_ricetta = tail_ordine->ricetta_ord->ingredienti;
-
-        while (current_ingrediente_ricetta != NULL) {
-            ingrediente *curr_lot = current_ingrediente_ricetta->ingr->ingredienti;
-
-            while (current_ingrediente_ricetta->ingr->booked > 0) {
-                if (curr_lot->qta <= current_ingrediente_ricetta->ingr->booked) {
-                    current_ingrediente_ricetta->ingr->booked -= curr_lot->qta;
-                    current_ingrediente_ricetta->ingr->tot_av -= curr_lot->qta;
-
-                    ingrediente *to_remove = curr_lot;
-                    curr_lot = curr_lot->next;
-                    current_ingrediente_ricetta->ingr->ingredienti = curr_lot;
-
-                    free(to_remove);
-                } else {
-                    current_ingrediente_ricetta->ingr->tot_av -= current_ingrediente_ricetta->ingr->booked;
-                    curr_lot->qta -= current_ingrediente_ricetta->ingr->booked;
-                    current_ingrediente_ricetta->ingr->booked = 0;
-                }
-            }
-
-            current_ingrediente_ricetta = current_ingrediente_ricetta->next;
-        }
-    }
-
-    // Free the bookings list after processing
-    bookings *to_free;
-    while (head_bookings != NULL) {
-        to_free = head_bookings;
-        head_bookings = head_bookings->next;
-        free(to_free);
-    }
-}
-
 
 void rifornisci(char *buffer, const int t) {
     char *token = strtok(buffer + 13, " \t\n");
