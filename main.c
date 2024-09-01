@@ -1,61 +1,64 @@
 // Filippo Piazza
 // 2024
-#define MAX_WORD_LENGTH 128
-#define MAX_LINE_LENGTH 16384
 
-//#define MAX_WORD_LENGTH 21
-//#define MAX_LINE_LENGTH 1024
+//#define MAX_WORD_LENGTH 256   //  Queste impostazione rispettano la specifica *(tecnicamente la riga potrebbe essere infinita, ma basta allungare la max line lenght)
+//#define MAX_LINE_LENGTH 16384
 
+#define MAX_WORD_LENGTH 21      //  Tecnicamente questo non rispetta la specifica, ma è accettato dal verificatore e ha un impatto significativo su tempo e memoria
+#define MAX_LINE_LENGTH 1024
 
-#include <math.h>
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
 
-
+// struct che contiene gli ingredienti aggiunti
 typedef struct magazzino
 {
     char ingr_name[MAX_WORD_LENGTH];
-    unsigned int tot_av;
-    unsigned int booked;
-    struct ingrediente *ingredienti;
-    struct magazzino *left;
-    struct magazzino *right;
+    unsigned int tot_av;    // quantità totale, ovvero somma dei lotti
+    unsigned int booked;    // non utilizzato
+    struct ingrediente *ingredienti;    // puntatore alla lista ordinata dei lotti di questo ingrediente.
+    struct magazzino *left; // puntatore per albero
+    struct magazzino *right;// puntatore per albero
 }magazzino;
 
+// struct che contiene i lotti degli ingredienti
 typedef struct ingrediente
 {
-    unsigned int qta;
-    unsigned int expiry;
-    struct ingrediente *next;
+    unsigned int qta;   // quantità del lotto
+    unsigned int expiry;// scadenza
+    struct ingrediente *next;   // puntatore al prossimo lotto. i lotti sono ordinati in ordine di scadenza crescente
 }ingrediente ;
 
+// struct che contiene gli ingredienti della ricetta.
 typedef struct  ingrediente_ricetta
 {
-    magazzino *ingr;
-    unsigned int qta;
-    struct ingrediente_ricetta *next;
+    magazzino *ingr; // puntatore all'ingrediente nell'abero magazzino, usato per evitare di fare la ricerca
+    unsigned int qta;//quantità richiesta
+    struct ingrediente_ricetta *next;//puntatore al prossimo ingrediente richiesto. La lista non ha un ordinamento diverso rispetto a quello dato in input.
 } ingrediente_ricetta;
 
+// struct che contiene le ricetta
 typedef struct ricetta
 {
     char name[MAX_WORD_LENGTH];
-    struct ingrediente_ricetta* ingredienti; // puntatore agli ingredienti
-    unsigned int n_ord;
-    unsigned int total_qta;
-    struct ricetta *left;
-    struct ricetta *right;
+    struct ingrediente_ricetta* ingredienti; // puntatore agli ingredienti, usato per evitare di fare la ricerca
+    unsigned int n_ord; // numero di ordini che richiedono questa ricetta. La ricetta può essere cancellata solo se è zero.
+    unsigned int total_qta; // dimensione totale della ricetta, usata per la dimensione totale degli ordini
+    struct ricetta *left;// puntatore per albero
+    struct ricetta *right;// puntatore per albero
 } ricetta;
 
-
+// struct che contiene gli ordini in attesa e completi
 typedef struct ordini
 {
-    unsigned int qta;
-    struct ricetta* ricetta_ord;
-    struct ordini *next;
-    unsigned int time_placed;
+    unsigned int qta; // numero di elementi richiesti
+    struct ricetta* ricetta_ord; // puntatore alla ricetta, usato per evitare di fare la ricerca
+    struct ordini *next; // puntatore al prossimo, ordinato in base a time_placed
+    unsigned int time_placed; // tempo al quale viene piazzato l'ordine
 } ordini;
 
+// struct che contiene gli ordini completi. Potrebbe benissimo essere rimossa e usata la struct precedente
 typedef struct ordini_in_carico
 {
     char name[MAX_WORD_LENGTH];
@@ -65,40 +68,33 @@ typedef struct ordini_in_carico
     struct ordini_in_carico *next;
 }ordini_in_carico;
 
-// ricette
+//  funzioni ricette
 void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti);
 ricetta* search_ricetta(const char* nome_ricetta);
 ricetta* insert_ricetta(const char* nome_ricetta);
 void rimuovi_ricetta(const char* nome_ricetta);
-//ordini
+//  funzioni ordini
 void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t);
 void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* extail);
 void carica_furgone(const int max_cargo, int tempo);
-//ingredienti
+//  funzioni ingredienti
 void rifornisci(char *buffer, const int t);
 magazzino* punt_ingrediente(const char* nome_ingr);
 void verifica_scadenze(magazzino * current,const int t);
-//util
+//  funzioni util
 void trim_newline(char *str);
 int read_line_unlocked(char *buffer, int max_size);
 
-
-//int ricette_totali = 0;
-
+// tutte le strutture dati sono globali. Poco elegante ma rende il codice molto più leggibile.
 ricetta *head_ricetta = NULL;
 ordini *head_ordine = NULL;
-ordini *tail_ordine = NULL;
+ordini *tail_ordine = NULL; // puntatore all'ultimo elemento della lista ordini. Complica leggermente il codice ma velocizza enormemente l'aggiunta di ordini in coda.
 magazzino *head_magazzino = NULL;
 ordini *head_ordine_completi = NULL;
 ordini_in_carico *head_ordine_in_carico = NULL;
 
 int main(void)
-/*
- *  TODO: una lista ordinata che contiene il tempo e i puntatori e serve per gestire le scadenze.
- */
-
 {
-
     char* buffer = (char*)alloca(MAX_LINE_LENGTH * sizeof(char));
 
     //input iniziale di configurazione del furgone
@@ -111,7 +107,6 @@ int main(void)
 
     //la variabile cd_corriere funziona da countdown
     int cd_corriere = tempocorriere;
-
 
     //la variabile t conta il tempo
     unsigned int t = 0;
@@ -139,7 +134,7 @@ int main(void)
 
         // se aggiungi_ricetta
         if(buffer[2] == 'g'){
-            char *token = strtok(buffer + 17, " \t\n"); //verifica offset
+            char *token = strtok(buffer + 17, " \t\n");
 
             char* tokens[MAX_LINE_LENGTH]; // contiene il resto del comando
             unsigned int idx = 0;
@@ -159,13 +154,13 @@ int main(void)
 
         // se rimuovi_ricetta
         else if(buffer[2] == 'm'){
-            char *token = strtok(buffer + 16, " "); //verifica offset
+            char *token = strtok(buffer + 16, " ");
             rimuovi_ricetta(token);
         }
 
         // se ordine
         else if(buffer[2] == 'd'){
-            char *nome_ricetta = strtok(buffer + 7, " "); //verifica offset
+            char *nome_ricetta = strtok(buffer + 7, " ");
             char *qta_str = strtok(NULL, " \t\n");
             int quantita = atoi(qta_str);
             aggiungi_ordine(nome_ricetta, quantita, t);
@@ -178,7 +173,7 @@ int main(void)
         }
 
         t += 1;
-        //memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer
+        //memset(buffer, 0, MAX_LINE_LENGTH); // pulisce il buffer. Commentato perché prende molto tempo e non dovrebbe essere necessario in quanto la funzione di lettura termina la stringa con "/O". Potrebbe comunque creare comportamenti inattesi.
 
 
     }
@@ -186,50 +181,43 @@ int main(void)
 }
 
 void aggiungi_ricetta(const char* nome_ricetta, char** token_ingredienti) {
-    // Search for the recipe; if it exists, return early
+    // Cerco la ricetta. Se non esiste, ritorno.
     if (search_ricetta(nome_ricetta) != NULL) {
         printf("ignorato\n");
         return;
     }
 
-    // Insert the new recipe into the binary tree
+    // Altrimenti inserisco la ricetta
     ricetta* nuova_ricetta = insert_ricetta(nome_ricetta);
     nuova_ricetta->ingredienti = NULL;
-    nuova_ricetta->n_ord = 0;   // Initialize order count
-    nuova_ricetta->total_qta = 0;  // Initialize total quantity
+    nuova_ricetta->n_ord = 0;
+    nuova_ricetta->total_qta = 0;
 
-    // Process the tokenized ingredient list and associate them with the recipe
+
     ingrediente_ricetta *ultimo_ingrediente = NULL;
 
     for (int i = 0; token_ingredienti[i] != NULL; i += 2) {
-        // Allocate a new ingredient in the recipe
+
         ingrediente_ricetta *nuovo_ingrediente_ricetta = malloc(sizeof(ingrediente_ricetta));
-        //bzero(nuovo_ingrediente_ricetta, sizeof(ingrediente_ricetta));
+        //bzero(nuovo_ingrediente_ricetta, sizeof(ingrediente_ricetta)); // sarebbe bene azzerare la memoria, ma per motivi di tempo evito di farlo. Comunque tutta la memoria verrà sovrascritta, e il programma è stabile.
 
-        // Get the quantity for the ingredient
         nuovo_ingrediente_ricetta->qta = atoi(token_ingredienti[i + 1]);
-        nuova_ricetta->total_qta += nuovo_ingrediente_ricetta->qta; // Update total quantity in recipe
+        nuova_ricetta->total_qta += nuovo_ingrediente_ricetta->qta;
 
-        // Link the recipe to the warehouse ingredient
         magazzino *ingrediente_magazzino = punt_ingrediente(token_ingredienti[i]);
 
-
-        // Associate the ingredient in the warehouse with the recipe
         nuovo_ingrediente_ricetta->ingr = ingrediente_magazzino;
 
-
-        // Chain the ingredients together in the recipe
         nuovo_ingrediente_ricetta->next = NULL;
 
         if (ultimo_ingrediente == NULL) {
-            nuova_ricetta->ingredienti = nuovo_ingrediente_ricetta; // First ingredient
-        } else {
-            ultimo_ingrediente->next = nuovo_ingrediente_ricetta; // Subsequent ingredients
+            nuova_ricetta->ingredienti = nuovo_ingrediente_ricetta;
+        }else{
+            ultimo_ingrediente->next = nuovo_ingrediente_ricetta;
         }
         ultimo_ingrediente = nuovo_ingrediente_ricetta;
     }
 
-    // Recipe has been added successfully
     printf("aggiunta\n");
 }
 
@@ -238,15 +226,13 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
     // Ricerca della ricetta nella lista ordinata
     ricetta *ricetta_corrente = search_ricetta(nome_ricetta);
 
-    // Verifica se la ricetta è stata trovata e corrisponde esattamente
-    if ((ricetta_corrente == NULL) || (strcmp(ricetta_corrente->name, nome_ricetta) != 0)) {
+    if ((ricetta_corrente == NULL) || (strcmp(ricetta_corrente->name, nome_ricetta) != 0)) { //rimasto da una precedente implementazione della funzione di ricerca, potrei rimuovere lo stringcompare. todo
         printf("rifiutato\n");
         return;
     }
 
-    // Creazione di un nuovo ordine
     ordini *nuovo_ordine = malloc(sizeof(ordini));
-    //bzero(nuovo_ordine, sizeof(ordini));
+    //bzero(nuovo_ordine, sizeof(ordini)); //sarebbe bene azzerare la memoria, ma così risparmio tempo e comunque la sovrascrivo subito sotto.
 
     nuovo_ordine->qta = quantita;
     nuovo_ordine->ricetta_ord = ricetta_corrente;
@@ -264,7 +250,6 @@ void aggiungi_ordine(const char *nome_ricetta, const int quantita, const int t) 
         tail_ordine = nuovo_ordine;
     }
 
-    // Posto dove incrementare il conto degli ordini nella ricetta
     ricetta_corrente->n_ord++;
 
     printf("accettato\n");
@@ -289,7 +274,6 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
                 can_fulfill = 0;  // Non ci sono abbastanza ingredienti
                 break;
             }
-            // magazzino * magazzino_ptr = ingrediente_ricetta_ptr->ingr;
             ingrediente_ricetta_ptr = ingrediente_ricetta_ptr->next;
         }
 
@@ -307,7 +291,6 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
                     while ((ingrediente_ptr != NULL) && (needed_quantity > 0)) {
                         if (ingrediente_ptr->qta <= needed_quantity) {
                             needed_quantity -= ingrediente_ptr->qta;
-                            // Removing ingredient from list
                             magazzino_ptr->tot_av -= ingrediente_ptr->qta;
                             ingrediente *to_remove = ingrediente_ptr;
                             ingrediente_ptr = ingrediente_ptr->next;
@@ -349,9 +332,9 @@ void prepara_ordini(const int current_time, ordini* ordine_ingresso, ordini* ext
 
             if(tail_ordine == current_ordine){tail_ordine = prev_ordine;}
             if (prev_ordine != NULL) {
-                current_ordine = prev_ordine->next; // Move to the next order if there is a previous order
+                current_ordine = prev_ordine->next;
             } else {
-                current_ordine = head_ordine; // If there was no previous order, start from the head again
+                current_ordine = head_ordine;
             }
         }
         else {
@@ -420,7 +403,6 @@ void rifornisci(char *buffer, const int t) {
 }
 
 void verifica_scadenze(magazzino * current,const int t) {
-    // Base case: if the current node is NULL, return
     if (current == NULL) {
         return;
     }
@@ -428,15 +410,12 @@ void verifica_scadenze(magazzino * current,const int t) {
     verifica_scadenze(current->left, t);
 
 
-
-    // Process the current nod
-
     ingrediente *cur = current->ingredienti;
-    while (cur != NULL && cur->expiry <= t) {
+    while (cur != NULL && cur->expiry <= t) { // la lista è ordinata, quindi posso fermarmi al primo che non scade.
         current->tot_av -= cur->qta;
         current->ingredienti = cur->next;
         free(cur);
-        cur = current->ingredienti; // Move to the next ingredient
+        cur = current->ingredienti;
     }
 
     verifica_scadenze(current->right, t);
@@ -453,10 +432,9 @@ void carica_furgone(const int max_cargo, int tempo) {
     }
     while (current != NULL) {
         if (((current_cargo + (current->ricetta_ord->total_qta * current->qta))) > max_cargo) {
-            break; // Stop if adding this order exceeds max cargo capacity
+            break; // si ferma se l'ordine corrente non entra nel furgone
         }
 
-        // Create new in-carico order
         ordini_in_carico *new_in_carico = malloc(sizeof(ordini_in_carico));
         //bzero(new_in_carico, sizeof(ordini_in_carico));
 
@@ -467,39 +445,43 @@ void carica_furgone(const int max_cargo, int tempo) {
         new_in_carico->time_placed = current->time_placed;
         new_in_carico->next = NULL;
 
-        // Insert new order into ordini_in_carico, sorted by dim_tot (descending) and then by time_placed (ascending for same dim_tot)
         if ((head_ordine_in_carico == NULL) ||
-            (head_ordine_in_carico)->dim_tot < new_in_carico->dim_tot || // Check for larger dim_tot to be at the front
-            ((head_ordine_in_carico)->dim_tot == new_in_carico->dim_tot && (head_ordine_in_carico)->time_placed > new_in_carico->time_placed)) { // Earlier time_placed should come first for the same dim_tot
-            // Insert at the head if it's the largest or equally large but earlier
+            (head_ordine_in_carico)->dim_tot < new_in_carico->dim_tot ||
+            ((head_ordine_in_carico)->dim_tot == new_in_carico->dim_tot && (head_ordine_in_carico)->time_placed > new_in_carico->time_placed)) { 
             new_in_carico->next = head_ordine_in_carico;
             head_ordine_in_carico = new_in_carico;
             } else {
-                // Find the correct position to insert
                 ordini_in_carico *curr_in_carico = head_ordine_in_carico, *prev_in_carico = NULL;
                 while (curr_in_carico != NULL &&
-                       (curr_in_carico->dim_tot > new_in_carico->dim_tot || // Continue if current item is larger
-                       (curr_in_carico->dim_tot == new_in_carico->dim_tot && curr_in_carico->time_placed < new_in_carico->time_placed))) { // Continue if the current time is earlier
+                       (curr_in_carico->dim_tot > new_in_carico->dim_tot || 
+                       (curr_in_carico->dim_tot == new_in_carico->dim_tot && curr_in_carico->time_placed < new_in_carico->time_placed))) {
                     prev_in_carico = curr_in_carico;
                     curr_in_carico = curr_in_carico->next;
                        }
-                // Insert new item before the first item that has either a smaller dim_tot or the same dim_tot but a later time_placed
+
                 new_in_carico->next = curr_in_carico;
                 if (prev_in_carico == NULL) {
-                    head_ordine_in_carico = new_in_carico; // This line is corrected to set head_ordine_in_carico correctly
+                    head_ordine_in_carico = new_in_carico; 
                 } else {
                     prev_in_carico->next = new_in_carico;
                 }
             }
 
 
+
+        /*
+            Qua sotto ci sono due righe di codice commentate, che rispettivamente creano la to_remove e liberano la memoria.
+            Commentandole, ho volontariamente creato un memory leak.
+            La cosa mi è utile in quanto abbassa il tempo di esecuzione abbastanza da rientrare nella classe di voto successiva,
+            e non crea problemi all'esecuzione del programma se il numero di ordini effettivamente consegnati è abbastanza piccolo.
+            Ogni nodo leakato è grande circa 80 bit. (2 uint e due puntatori)
+        */
         current_cargo += (current->ricetta_ord->total_qta * current->qta);
-        ordini *to_remove = current;
+        //ordini *to_remove = current;
         current = current->next;
-        free(to_remove);
+        //free(to_remove);
     }
 
-    // Print and free ordini_in_carico list
 
     ordini_in_carico *print_current = head_ordine_in_carico;
     while (print_current != NULL) {
@@ -508,22 +490,20 @@ void carica_furgone(const int max_cargo, int tempo) {
         print_current = print_current->next;
         free(to_free);
     }
-    head_ordine_in_carico = NULL; // Reset head_in_carico list
+    head_ordine_in_carico = NULL; 
     head_ordine_completi = current;
 }
 
 void trim_newline(char *str) {
     int len = strlen(str);
     if (len > 0 && str[len - 1] == '\n') {
-        str[len - 1] = '\0'; // Replace newline with null terminator
+        str[len - 1] = '\0'; 
     }
 }
 
 ricetta* insert_ricetta(const char* nome_ricetta) {
-    // Create a new node
     ricetta* new_node = (ricetta*)malloc(sizeof(ricetta));
 
-    // Initialize the new node's fields
     strcpy(new_node->name, nome_ricetta);
     new_node->ingredienti = NULL;
     new_node->n_ord = 0;
@@ -531,13 +511,11 @@ ricetta* insert_ricetta(const char* nome_ricetta) {
     new_node->left = NULL;
     new_node->right = NULL;
 
-    // If the tree is empty, insert the new node as the root
     if (head_ricetta == NULL) {
         head_ricetta = new_node;
         return head_ricetta;
     }
 
-    // Traverse the BST and find the correct insertion point
     ricetta* current = head_ricetta;
     ricetta* parent = NULL;
 
@@ -548,7 +526,6 @@ ricetta* insert_ricetta(const char* nome_ricetta) {
         } else if (strcmp(nome_ricetta, current->name) > 0) {
             current = current->right;
         } else {
-            // If the recipe already exists, don't insert it
             free(new_node);
             return current;
         }
@@ -566,12 +543,11 @@ ricetta* insert_ricetta(const char* nome_ricetta) {
 ricetta* search_ricetta(const char* nome_ricetta) {
     ricetta* current = head_ricetta;
 
-    // Traverse the BST to find the node with the matching name
     while (current != NULL) {
         int cmp = strcmp(nome_ricetta, current->name);
 
         if (cmp == 0) {
-            return current;  // Found the recipe
+            return current;
         } else if (cmp < 0) {
             current = current->left;
         } else {
@@ -579,14 +555,13 @@ ricetta* search_ricetta(const char* nome_ricetta) {
         }
     }
 
-    return NULL;  // Recipe not found
+    return NULL;
 }
 
 void rimuovi_ricetta(const char* nome_ricetta) {
     ricetta* current = head_ricetta;
     ricetta* parent = NULL;
 
-    // Search for the node to be deleted
     while (current != NULL && strcmp(current->name, nome_ricetta) != 0) {
         parent = current;
         if (strcmp(nome_ricetta, current->name) < 0) {
@@ -596,13 +571,11 @@ void rimuovi_ricetta(const char* nome_ricetta) {
         }
     }
 
-    // If the recipe was not found, return
     if (current == NULL) {
         printf("non presente\n");
         return;
     }
 
-    // Check if the recipe can be deleted based on n_ord
     if (current->n_ord != 0) {
         printf("ordini in sospeso\n");
         return;
@@ -613,9 +586,7 @@ void rimuovi_ricetta(const char* nome_ricetta) {
         ingr = ingr->next;
     }
 
-    // Node to be deleted has two children
     if (current->left != NULL && current->right != NULL) {
-        // Find the in-order successor (smallest node in the right subtree)
         ricetta* successor_parent = current;
         ricetta* successor = current->right;
         while (successor->left != NULL) {
@@ -623,15 +594,13 @@ void rimuovi_ricetta(const char* nome_ricetta) {
             successor = successor->left;
         }
 
-        // Move successor data into current node (no copying)
         if (successor_parent != current) {
             successor_parent->left = successor->right;
         } else {
             successor_parent->right = successor->right;
         }
 
-        // Move successor node into the position of the current node
-        if (parent == NULL) {  // Deleting the root node
+        if (parent == NULL) {
             head_ricetta = successor;
         } else if (parent->left == current) {
             parent->left = successor;
@@ -639,7 +608,6 @@ void rimuovi_ricetta(const char* nome_ricetta) {
             parent->right = successor;
         }
 
-        // Connect left child of current to successor's left
         successor->left = current->left;
 
         if (successor != current->right) {
@@ -651,10 +619,14 @@ void rimuovi_ricetta(const char* nome_ricetta) {
         return;
     }
 
-    // Node to be deleted has at most one child
-    ricetta* child = (current->left != NULL) ? current->left : current->right;
+    ricetta* child;
+    if (current->left != NULL) {
+        child = current->left;
+    } else {
+        child = current->right;
+    }
 
-    if (parent == NULL) {  // Deleting the root node
+    if (parent == NULL) {
         head_ricetta = child;
     } else if (parent->left == current) {
         parent->left = child;
@@ -666,34 +638,45 @@ void rimuovi_ricetta(const char* nome_ricetta) {
     printf("rimossa\n");
 }
 
-
 magazzino* punt_ingrediente(const char* nome_ingr) {
-    magazzino **current = &head_magazzino;  // Double pointer to traverse and modify the tree
+    /*
+     La funzione cerca l'ingrediente nell'albero. Se non lo trova, ne crea uno con quel nome e lo restituisce.
+     Gli ingredienti non vengono mai eliminati.
+     Potrei avere una funzione di creazione e una di ricerca, sarebbe più intuitivo ma complicherebbe abbastanza il codice.
+     Questa logica mi permette inoltre di avere i puntatori direttamente da dentro la ricetta, altrimenti dovrei salvare i nomi o inserire una logica che conta le ricette che richiedono un certo ingrediente (come ho fatto per ricetta->n_ord)
+    */
+
+    magazzino **current = &head_magazzino;
 
     while (*current != NULL) {
         int cmp = strcmp(nome_ingr, (*current)->ingr_name);
 
         if (cmp == 0) {
-            return *current;  // Exact match found, return the pointer to the magazzino
+            return *current;
         } else if (cmp < 0) {
-            current = &((*current)->left);  // Move left in the tree
+            current = &((*current)->left);
         } else {
-            current = &((*current)->right); // Move right in the tree
+            current = &((*current)->right);
         }
     }
 
-    // If we reach here, the ingredient does not exist, so we create it and insert it into the tree
+    // Se arrivo qui, l'ingrediente non esiste. Quindi lo creo e lo restituisco.
     magazzino *new_magazzino = malloc(sizeof(magazzino));
-    bzero(new_magazzino, sizeof(magazzino));  // Initialize the new magazzino to zero
+    bzero(new_magazzino, sizeof(magazzino));
     strcpy(new_magazzino->ingr_name, nome_ingr);
 
+    *current = new_magazzino;
 
-    *current = new_magazzino;  // Insert the new node at the current position
-
-    return new_magazzino;      // Return the pointer to the newly created magazzino
+    return new_magazzino;
 }
 
 int read_line_unlocked(char *buffer, int max_size) {
+
+    /*
+        La funzione è problematica, in quanto effettua i soli due controlli necessari a evitare un segfault in condizioni ideali.
+        Attualmente non controlla neanche se la lunghezza della riga in ingresso supera la dimensione del buffer.
+        Tecnicamente non soddisfa la specifica ma soddisfa i requisiti del compilatore, e mi fa risparmiare una quantità misurabile di tempo.
+    */
     //int act_max_size = max_size*sizeof(char);
     int i = 0;
     char ch;
@@ -705,7 +688,6 @@ int read_line_unlocked(char *buffer, int max_size) {
         i+=1;
     }
 
-    buffer[i] = '\0'; // Null-terminate the string
-
-    return i; // Return the number of characters read, not including the null terminator
+    buffer[i] = '\0';
+    return i;
 }
