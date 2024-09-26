@@ -16,7 +16,6 @@ typedef struct magazzino
 {
     char ingr_name[MAX_WORD_LENGTH];
     unsigned int tot_av;    // quantità totale, ovvero somma dei lotti
-    unsigned int booked;    // non utilizzato
     struct ingrediente *ingredienti;    // puntatore alla lista ordinata dei lotti di questo ingrediente.
     struct magazzino *left; // puntatore per albero
     struct magazzino *right;// puntatore per albero
